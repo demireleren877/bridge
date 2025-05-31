@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}{{ process.name }} - İstatistikler{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">{{ process.name }}</h1>
+            <p class="text-muted mb-0">İstatistikler</p>
+        </div>
+        <a href="{{ url_for('process_detail', process_id=process.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Geri Dön
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4 justify-content-center">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body compact-card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0">
+                            <div class="stats-icon bg-primary bg-opacity-10 text-primary">
+                                <i class="bi bi-list-check"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="card-subtitle text-muted mb-1">Toplam Adım</h6>
+                            <h3 class="card-title mb-0">{{ total_steps|default(0) }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body compact-card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0">
+                            <div class="stats-icon bg-success bg-opacity-10 text-success">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="card-subtitle text-muted mb-1">Tamamlanan</h6>
+                            <h3 class="card-title mb-0">{{ completed_steps|default(0) }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm clickable" id="responsiblesCard" tabindex="0" role="button">
+                <div class="card-body compact-card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0">
+                            <div class="stats-icon bg-warning bg-opacity-10 text-warning">
+                                <i class="bi bi-people"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="card-subtitle text-muted mb-1">Aktif Sorumlular</h6>
+                            <h3 class="card-title mb-0">{{ active_responsibles|default(0) }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sorumlular Modalı -->
+    <div class="modal fade" id="responsiblesModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Aktif Sorumlular</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if responsibles and responsibles|length > 0 %}
+                        <ul class="list-group">
+                        {% for r in responsibles %}
+                            <li class="list-group-item">{{ r }}</li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="text-muted">Sorumlu yok.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-3 justify-content-center">
+        <!-- Completion Status -->
+        <div class="col-md-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Tamamlanma Durumu</h5>
+                    <canvas id="completionChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step Types -->
+        <div class="col-md-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Adım Tipleri</h5>
+                    <canvas id="stepTypesChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completion Timeline -->
+        <div class="col-md-10">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Tamamlanma Zaman Çizelgesi</h5>
+                    <canvas id="timelineChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+.stats-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.compact-card-body {
+    padding: 0.3rem 0.5rem 0.3rem 0.5rem !important;
+    min-height: 38px;
+    height: auto;
+    display: flex;
+    align-items: center;
+}
+.card-title.mb-0, .card-title {
+    font-size: 1.05rem;
+    margin-bottom: 0 !important;
+    line-height: 1.05;
+}
+.card-subtitle {
+    font-size: 0.82rem;
+    margin-bottom: 0.05rem;
+}
+.d-flex.align-items-center.mb-2 {
+    margin-bottom: 0.05rem !important;
+    min-height: 32px;
+}
+.card {
+    margin-bottom: 0 !important;
+}
+.card:hover, .card.clickable:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 0.15rem var(--bs-warning);
+}
+.clickable {
+    cursor: pointer;
+}
+[data-bs-theme="dark"] .card {
+    background-color: var(--bs-dark);
+}
+[data-bs-theme="dark"] .stats-icon {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script id="chart-data" type="application/json">
+{
+  "completionData": {{ completion_data|default([0,0,0,0])|tojson }},
+  "stepTypes": {{ step_types|default([])|tojson }},
+  "stepTypeCounts": {{ step_type_counts|default([])|tojson }},
+  "timelineDates": {{ timeline_dates|default([])|tojson }},
+  "timelineCounts": {{ timeline_counts|default([])|tojson }}
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // JSON'dan verileri al
+    const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+    const completionData = chartData.completionData;
+    const stepTypes = chartData.stepTypes;
+    const stepTypeCounts = chartData.stepTypeCounts;
+    const timelineDates = chartData.timelineDates;
+    const timelineCounts = chartData.timelineCounts;
+
+    // Aktif sorumlular kartı tıklanınca modalı aç
+    var responsiblesCard = document.getElementById('responsiblesCard');
+    if (responsiblesCard) {
+        responsiblesCard.addEventListener('click', function() {
+            var modal = new bootstrap.Modal(document.getElementById('responsiblesModal'));
+            modal.show();
+        });
+        responsiblesCard.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                var modal = new bootstrap.Modal(document.getElementById('responsiblesModal'));
+                modal.show();
+            }
+        });
+    }
+
+    // Chart.js global defaults
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.plugins.legend.position = 'bottom';
+    Chart.defaults.plugins.legend.labels.usePointStyle = true;
+    Chart.defaults.plugins.legend.labels.padding = 20;
+    Chart.defaults.plugins.tooltip.padding = 12;
+    Chart.defaults.plugins.tooltip.cornerRadius = 8;
+    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+
+    // Completion Status Chart
+    new Chart(document.getElementById('completionChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Tamamlandı', 'Devam Ediyor', 'Beklemede', 'Başlamadı'],
+            datasets: [{
+                data: completionData,
+                backgroundColor: [
+                    'rgba(40, 167, 69, 0.8)',
+                    'rgba(0, 123, 255, 0.8)',
+                    'rgba(255, 193, 7, 0.8)',
+                    'rgba(108, 117, 125, 0.8)'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            cutout: '70%',
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // Step Types Chart
+    new Chart(document.getElementById('stepTypesChart'), {
+        type: 'bar',
+        data: {
+            labels: stepTypes,
+            datasets: [{
+                label: 'Adım Sayısı',
+                data: stepTypeCounts,
+                backgroundColor: 'rgba(0, 123, 255, 0.8)',
+                borderRadius: 8,
+                borderWidth: 0
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        display: false
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+
+    // Timeline Chart (no zoom/pan)
+    new Chart(document.getElementById('timelineChart'), {
+        type: 'line',
+        data: {
+            labels: timelineDates,
+            datasets: [{
+                label: 'Tamamlanan Adımlar',
+                data: timelineCounts,
+                borderColor: 'rgba(0, 123, 255, 0.8)',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        display: false
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %} 

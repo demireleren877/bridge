@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if is_uncategorized %}
+Kategorisiz Süreçler - {{ year }} - {{ super() }}
+{% else %}
+{{ category.name }} - {{ year }} - {{ super() }}
+{% endif %}
+{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .process-card {
+        transition: transform 0.2s;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .process-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .editable {
+        cursor: pointer;
+        position: relative;
+    }
+
+    .editable:hover::after {
+        content: '✎';
+        position: absolute;
+        margin-left: 5px;
+        opacity: 0.5;
+    }
+
+    .edit-input {
+        width: 100%;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 5px;
+    }
+
+    .edit-textarea {
+        width: 100%;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 5px;
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .progress {
+        position: relative;
+        height: 20px;
+    }
+
+    .progress-bar {
+        transition: width 0.3s ease;
+    }
+
+    .progress-text {
+        position: absolute;
+        width: 100%;
+        left: 0;
+        text-align: center;
+        line-height: 20px;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.875rem;
+        z-index: 1;
+        text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Kategoriler</a></li>
+                {% if is_uncategorized %}
+                <li class="breadcrumb-item"><a href="{{ url_for('uncategorized_years') }}">Kategorisiz</a></li>
+                {% else %}
+                <li class="breadcrumb-item"><a href="{{ url_for('category_years', category_id=category.id) }}">{{
+                        category.name }}</a></li>
+                {% endif %}
+                <li class="breadcrumb-item active">{{ year }}</li>
+            </ol>
+        </nav>
+        <div>
+            <a href="{{ url_for('new_process') }}" class="btn btn-success">
+                <i class="bi bi-plus-lg"></i> Yeni Süreç
+            </a>
+        </div>
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for process in processes %}
+        <div class="col">
+            <div class="card h-100 process-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0">
+                            <span class="editable process-name" data-process-id="{{ process.id }}">{{ process.name
+                                }}</span>
+                            <input type="text" class="edit-input d-none" value="{{ process.name }}">
+                        </h5>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <form action="" method="POST" class="d-inline">
+                                        <button type="submit" class="dropdown-item">
+                                            <i class="bi bi-files me-2"></i> Akış Şeması
+                                        </button>
+                                    </form>
+                                </li>
+                                <li>
+                                    <button type="button" class="dropdown-item" data-bs-toggle="modal"
+                                        data-bs-target="#updateProcessModal{{ process.id }}">
+                                        <i class="bi bi-pencil-square me-2"></i> Kategori/Yıl Değiştir
+                                    </button>
+                                </li>
+                                <li>
+                                    <form action="{{ url_for('copy_process', process_id=process.id) }}" method="POST"
+                                        class="d-inline">
+                                        <button type="submit" class="dropdown-item">
+                                            <i class="bi bi-files me-2"></i> Kopyala
+                                        </button>
+                                    </form>
+                                </li>
+                                <li>
+                                    <form action="{{ url_for('delete_process', process_id=process.id) }}" method="POST"
+                                        onsubmit="return confirm('Bu süreci silmek istediğinizden emin misiniz?')"
+                                        class="d-inline">
+                                        <button type="submit" class="dropdown-item text-danger">
+                                            <i class="bi bi-trash me-2"></i> Sil
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <p class="card-text text-muted">
+                        <span class="editable process-description" data-process-id="{{ process.id }}">
+                            {{ process.description or 'Açıklama ekle...' }}
+                        </span>
+                        <textarea class="edit-textarea d-none">{{ process.description or '' }}</textarea>
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="progress flex-grow-1 me-2">
+                            <div class="progress-bar" role="progressbar"
+                                aria-valuenow="{{ process.get_completion_percentage() }}" aria-valuemin="0"
+                                aria-valuemax="100" style="width: {{ process.get_completion_percentage() }}%">
+                                <span class="progress-text">{{ process.get_completion_percentage() }}%</span>
+                            </div>
+                        </div>
+                        <a href="{{ url_for('process_detail', process_id=process.id) }}"
+                            class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <small class="text-muted">
+                        <i class="bi bi-clock"></i> {{ process.created_at|format_datetime }}
+                    </small>
+                    <span class="float-end">
+                        {% if process.get_status() == 'done' %}
+                        <span class="badge bg-success">Tamamlandı</span>
+                        {% elif process.get_status() == 'in_progress' %}
+                        <span class="badge bg-primary">Devam Ediyor</span>
+                        {% elif process.get_status() == 'waiting' %}
+                        <span class="badge bg-warning">Beklemede</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Başlamadı</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal -->
+        <div class="modal fade" id="updateProcessModal{{ process.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Süreç Bilgilerini Güncelle</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{{ url_for('update_process_category', process_id=process.id) }}" method="POST">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="category{{ process.id }}" class="form-label">Kategori</label>
+                                <select class="form-select" id="category{{ process.id }}" name="category_id">
+                                    <option value="">Kategorisiz</option>
+                                    {% for cat in all_categories %}
+                                    <option value="{{ cat.id }}" {% if cat.id==process.category_id %}selected{% endif
+                                        %}>
+                                        {{ cat.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="year{{ process.id }}" class="form-label">Yıl</label>
+                                <select class="form-select" id="year{{ process.id }}" name="year">
+                                    {% for y in range(current_year + 5, current_year - 5, -1) %}
+                                    <option value="{{ y }}" {% if y==process.year %}selected{% endif %}>{{ y }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary"
+                                data-bs-dismiss="modal">İptal</button>
+                            <button type="submit" class="btn btn-primary">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    // İsim düzenleme
+    document.querySelectorAll('.process-name').forEach(nameSpan => {
+        nameSpan.addEventListener('click', function () {
+            const input = this.nextElementSibling;
+            this.classList.add('d-none');
+            input.classList.remove('d-none');
+            input.focus();
+            input.dataset.version = this.dataset.version;
+        });
+    });
+
+    // Açıklama düzenleme
+    document.querySelectorAll('.process-description').forEach(descSpan => {
+        descSpan.addEventListener('click', function () {
+            const textarea = this.nextElementSibling;
+            this.classList.add('d-none');
+            textarea.classList.remove('d-none');
+            textarea.focus();
+        });
+    });
+
+    // İsim kaydetme
+    document.querySelectorAll('.process-name + .edit-input').forEach(input => {
+        input.addEventListener('blur', async function () {
+            const span = this.previousElementSibling;
+            const processId = span.dataset.processId;
+            const currentVersion = span.dataset.version;
+            const newValue = this.value.trim();
+
+            if (newValue && newValue !== span.textContent) {
+                try {
+                    const response = await fetch(`/process/${processId}/update`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `field=name&value=${encodeURIComponent(newValue)}&version=${currentVersion}`
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        span.textContent = newValue;
+                        span.dataset.version = result.new_version;
+                    } else {
+                        alert(result.error || 'Güncelleme sırasında bir hata oluştu');
+                        if (result.error && result.error.includes('başka bir kullanıcı')) {
+                            window.location.reload();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Güncelleme hatası:', error);
+                    alert('Güncelleme sırasında bir hata oluştu');
+                }
+            }
+
+            this.classList.add('d-none');
+            span.classList.remove('d-none');
+        });
+
+        input.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                this.blur();
+            }
+        });
+    });
+
+    // Açıklama kaydetme
+    document.querySelectorAll('.process-description + .edit-textarea').forEach(textarea => {
+        textarea.addEventListener('blur', async function () {
+            const span = this.previousElementSibling;
+            const processId = span.dataset.processId;
+            const newValue = this.value.trim();
+
+            try {
+                const response = await fetch(`/process/${processId}/update`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `field=description&value=${encodeURIComponent(newValue)}`
+                });
+
+                if (response.ok) {
+                    span.textContent = newValue || 'Açıklama ekle...';
+                }
+            } catch (error) {
+                console.error('Güncelleme hatası:', error);
+            }
+
+            this.classList.add('d-none');
+            span.classList.remove('d-none');
+        });
+    });
+</script>
+{% endblock %}

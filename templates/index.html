@@ -1,0 +1,482 @@
+{% extends "base.html" %}
+
+{% block title %}Ana Sayfa - {{ super() }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .folder-icon {
+        font-size: 3rem;
+        color: #ffd700;
+        margin-bottom: 10px;
+    }
+
+    .category-folder {
+        text-align: center;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        background-color: #fff;
+        transition: transform 0.2s;
+        cursor: pointer;
+    }
+
+    .category-folder:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .year-folder {
+        text-align: center;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        background-color: #f8f9fa;
+    }
+
+    .editable {
+        cursor: pointer;
+        position: relative;
+    }
+
+    .editable:hover::after {
+        content: '✎';
+        position: absolute;
+        margin-left: 5px;
+        opacity: 0.5;
+    }
+
+    .edit-input {
+        width: 100%;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 5px;
+    }
+
+    .edit-textarea {
+        width: 100%;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 5px;
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .progress {
+        position: relative;
+        height: 20px;
+    }
+
+    .progress-bar {
+        transition: width 0.3s ease;
+    }
+
+    .progress-text {
+        position: absolute;
+        width: 100%;
+        left: 0;
+        text-align: center;
+        line-height: 20px;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.875rem;
+        z-index: 1;
+        text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .back-button {
+        margin-bottom: 20px;
+    }
+
+    .folder-content {
+        display: none;
+    }
+
+    .folder-content.active {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Süreç Yönetimi</h1>
+        <div>
+            <a href="{{ url_for('new_category') }}" class="btn btn-primary me-2">
+                <i class="fas fa-folder-plus"></i> Yeni Kategori
+            </a>
+            <a href="{{ url_for('new_process') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Yeni Süreç
+            </a>
+        </div>
+    </div>
+
+    <div id="categories-view">
+        <div class="row">
+            {% for category_data in processes_by_category.values() %}
+            <div class="col-md-3 mb-4">
+                <div class="category-folder" onclick="showYears('{{ category_data.category.id }}')">
+                    <i class="fas fa-folder folder-icon"></i>
+                    <h5 class="mb-2">{{ category_data.category.name }}</h5>
+                    <small class="text-muted">{{ category_data.category.description }}</small>
+                </div>
+            </div>
+            {% endfor %}
+
+            {% if uncategorized_processes %}
+            <div class="col-md-3 mb-4">
+                <div class="category-folder" onclick="showYears('uncategorized')">
+                    <i class="fas fa-folder folder-icon"></i>
+                    <h5 class="mb-2">Kategorisiz</h5>
+                    <small class="text-muted">Kategorisi olmayan süreçler</small>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% for category_data in processes_by_category.values() %}
+    <div id="years-{{ category_data.category.id }}" class="folder-content">
+        <button class="btn btn-secondary back-button" onclick="showCategories()">
+            <i class="fas fa-arrow-left"></i> Geri
+        </button>
+        <h3 class="mb-4">{{ category_data.category.name }}</h3>
+        <div class="row">
+            {% for year in category_data.years %}
+            <div class="col-md-3 mb-4">
+                <div class="year-folder" onclick="showProcesses('{{ category_data.category.id }}', '{{ year }}')">
+                    <i class="fas fa-calendar-alt folder-icon"></i>
+                    <h5>{{ year }}</h5>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% for year in category_data.years %}
+    <div id="processes-{{ category_data.category.id }}-{{ year }}" class="folder-content">
+        <button class="btn btn-secondary back-button" onclick="showYears('{{ category_data.category.id }}')">
+            <i class="fas fa-arrow-left"></i> Geri
+        </button>
+        <h3 class="mb-4">{{ category_data.category.name }} - {{ year }}</h3>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for process in category_data.processes_by_year[year] %}
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title mb-0">
+                                <span class="editable process-name" data-process-id="{{ process.id }}">{{ process.name
+                                    }}</span>
+                                <input type="text" class="edit-input d-none" value="{{ process.name }}">
+                            </h5>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <form action="" method="POST" class="d-inline">
+                                            <button type="submit" class="dropdown-item">
+                                                <i class="bi bi-files me-2"></i> Akış Şeması
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('copy_process', process_id=process.id) }}"
+                                            method="POST" class="d-inline">
+                                            <button type="submit" class="dropdown-item">
+                                                <i class="bi bi-files me-2"></i> Kopyala
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('delete_process', process_id=process.id) }}"
+                                            method="POST"
+                                            onsubmit="return confirm('Bu süreci silmek istediğinizden emin misiniz?')"
+                                            class="d-inline">
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="bi bi-trash me-2"></i> Sil
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <p class="card-text text-muted">
+                            <span class="editable process-description" data-process-id="{{ process.id }}">
+                                {{ process.description or 'Açıklama ekle...' }}
+                            </span>
+                            <textarea class="edit-textarea d-none">{{ process.description or '' }}</textarea>
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="progress flex-grow-1 me-2" style="height: 20px;">
+                                <div class="progress-bar" role="progressbar"
+                                    style="width: {{ process.get_completion_percentage() }}%">
+                                    <span class="progress-text">{{ process.get_completion_percentage() }}%</span>
+                                </div>
+                            </div>
+                            <a href="{{ url_for('process_detail', process_id=process.id) }}"
+                                class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">
+                            <i class="bi bi-clock"></i> {{ process.created_at|format_datetime }}
+                        </small>
+                        <span class="float-end">
+                            {% if process.get_status() == 'done' %}
+                            <span class="badge bg-success">Tamamlandı</span>
+                            {% elif process.get_status() == 'in_progress' %}
+                            <span class="badge bg-primary">Devam Ediyor</span>
+                            {% elif process.get_status() == 'waiting' %}
+                            <span class="badge bg-warning">Beklemede</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Başlamadı</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endfor %}
+
+    {% if uncategorized_processes %}
+    <div id="years-uncategorized" class="folder-content">
+        <button class="btn btn-secondary back-button" onclick="showCategories()">
+            <i class="fas fa-arrow-left"></i> Geri
+        </button>
+        <h3 class="mb-4">Kategorisiz Süreçler</h3>
+        <div class="row">
+            {% for year in uncategorized_years %}
+            <div class="col-md-3 mb-4">
+                <div class="year-folder" onclick="showProcesses('uncategorized', '{{ year }}')">
+                    <i class="fas fa-calendar-alt folder-icon"></i>
+                    <h5>{{ year }}</h5>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% for year in uncategorized_years %}
+    <div id="processes-uncategorized-{{ year }}" class="folder-content">
+        <button class="btn btn-secondary back-button" onclick="showYears('uncategorized')">
+            <i class="fas fa-arrow-left"></i> Geri
+        </button>
+        <h3 class="mb-4">Kategorisiz Süreçler - {{ year }}</h3>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for process in uncategorized_processes[year] %}
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title mb-0">
+                                <span class="editable process-name" data-process-id="{{ process.id }}">{{ process.name
+                                    }}</span>
+                                <input type="text" class="edit-input d-none" value="{{ process.name }}">
+                            </h5>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <form action="" method="POST" class="d-inline">
+                                            <button type="submit" class="dropdown-item">
+                                                <i class="bi bi-files me-2"></i> Akış Şeması
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('copy_process', process_id=process.id) }}"
+                                            method="POST" class="d-inline">
+                                            <button type="submit" class="dropdown-item">
+                                                <i class="bi bi-files me-2"></i> Kopyala
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('delete_process', process_id=process.id) }}"
+                                            method="POST"
+                                            onsubmit="return confirm('Bu süreci silmek istediğinizden emin misiniz?')"
+                                            class="d-inline">
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="bi bi-trash me-2"></i> Sil
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <p class="card-text text-muted">
+                            <span class="editable process-description" data-process-id="{{ process.id }}">
+                                {{ process.description or 'Açıklama ekle...' }}
+                            </span>
+                            <textarea class="edit-textarea d-none">{{ process.description or '' }}</textarea>
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="progress flex-grow-1 me-2" style="height: 20px;">
+                                <div class="progress-bar" role="progressbar"
+                                    style="width: {{ process.get_completion_percentage() }}%">
+                                    <span class="progress-text">{{ process.get_completion_percentage() }}%</span>
+                                </div>
+                            </div>
+                            <a href="{{ url_for('process_detail', process_id=process.id) }}"
+                                class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">
+                            <i class="bi bi-clock"></i> {{ process.created_at|format_datetime }}
+                        </small>
+                        <span class="float-end">
+                            {% if process.get_status() == 'done' %}
+                            <span class="badge bg-success">Tamamlandı</span>
+                            {% elif process.get_status() == 'in_progress' %}
+                            <span class="badge bg-primary">Devam Ediyor</span>
+                            {% elif process.get_status() == 'waiting' %}
+                            <span class="badge bg-warning">Beklemede</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Başlamadı</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<script>
+    function showCategories() {
+        document.querySelectorAll('.folder-content').forEach(el => el.classList.remove('active'));
+        document.getElementById('categories-view').classList.add('active');
+    }
+
+    function showYears(categoryId) {
+        document.querySelectorAll('.folder-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(`years-${categoryId}`).classList.add('active');
+    }
+
+    function showProcesses(categoryId, year) {
+        document.querySelectorAll('.folder-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(`processes-${categoryId}-${year}`).classList.add('active');
+    }
+
+    // İsim düzenleme
+    document.querySelectorAll('.process-name').forEach(nameSpan => {
+        nameSpan.addEventListener('click', function () {
+            const input = this.nextElementSibling;
+            this.classList.add('d-none');
+            input.classList.remove('d-none');
+            input.focus();
+            input.dataset.version = this.dataset.version;
+        });
+    });
+
+    // Açıklama düzenleme
+    document.querySelectorAll('.process-description').forEach(descSpan => {
+        descSpan.addEventListener('click', function () {
+            const textarea = this.nextElementSibling;
+            this.classList.add('d-none');
+            textarea.classList.remove('d-none');
+            textarea.focus();
+        });
+    });
+
+    // İsim kaydetme
+    document.querySelectorAll('.process-name + .edit-input').forEach(input => {
+        input.addEventListener('blur', async function () {
+            const span = this.previousElementSibling;
+            const processId = span.dataset.processId;
+            const currentVersion = span.dataset.version;
+            const newValue = this.value.trim();
+
+            if (newValue && newValue !== span.textContent) {
+                try {
+                    const response = await fetch(`/process/${processId}/update`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `field=name&value=${encodeURIComponent(newValue)}&version=${currentVersion}`
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        span.textContent = newValue;
+                        span.dataset.version = result.new_version;
+                    } else {
+                        alert(result.error || 'Güncelleme sırasında bir hata oluştu');
+                        if (result.error && result.error.includes('başka bir kullanıcı')) {
+                            window.location.reload();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Güncelleme hatası:', error);
+                    alert('Güncelleme sırasında bir hata oluştu');
+                }
+            }
+
+            this.classList.add('d-none');
+            span.classList.remove('d-none');
+        });
+
+        input.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                this.blur();
+            }
+        });
+    });
+
+    // Açıklama kaydetme
+    document.querySelectorAll('.process-description + .edit-textarea').forEach(textarea => {
+        textarea.addEventListener('blur', async function () {
+            const span = this.previousElementSibling;
+            const processId = span.dataset.processId;
+            const newValue = this.value.trim();
+
+            try {
+                const response = await fetch(`/process/${processId}/update`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `field=description&value=${encodeURIComponent(newValue)}`
+                });
+
+                if (response.ok) {
+                    span.textContent = newValue || 'Açıklama ekle...';
+                }
+            } catch (error) {
+                console.error('Güncelleme hatası:', error);
+            }
+
+            this.classList.add('d-none');
+            span.classList.remove('d-none');
+        });
+    });
+
+    // Sayfa yüklendiğinde kategorileri göster
+    document.addEventListener('DOMContentLoaded', function () {
+        showCategories();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Değişken - {{ super() }}{% endblock %}
+
+{% block content %}
+<style>
+    .form-control:focus {
+        box-shadow: none;
+        border-color: #86b7fe;
+    }
+    .form-switch .form-check-input {
+        width: 45px;
+        height: 24px;
+        margin-top: 0;
+    }
+    .form-switch .form-check-label {
+        padding-top: 2px;
+        margin-left: 10px;
+    }
+    .card-body {
+        padding: 1.5rem;
+    }
+</style>
+
+<div class="container py-4">
+    <div class="card">
+        <div class="card-body">
+            <h2 class="card-title mb-4">Yeni Değişken Ekle</h2>
+            <form method="POST">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Değişken Adı</label>
+                    <input type="text" class="form-control" id="name" name="name" required>
+                </div>
+                <div class="mb-3">
+                    <label for="var_type" class="form-label">Değişken Tipi</label>
+                    <select class="form-select" id="var_type" name="var_type" required>
+                        {% if is_mail_step %}
+                        <option value="mail_config">Mail Konfigürasyonu</option>
+                        {% else %}
+                        <option value="string">Metin</option>
+                        <option value="number">Sayı</option>
+                        <option value="boolean">Boolean</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                {% if step.parent_id %}
+                <div class="mb-3">
+                    <label for="scope" class="form-label">Kapsam</label>
+                    <select class="form-select" id="scope" name="scope" required>
+                        <option value="step_only">Sadece Bu Adım</option>
+                        <option value="process_wide">Süreç Genelinde</option>
+                    </select>
+                </div>
+
+                <div class="mb-3" id="parent-variable-container" style="display: none;">
+                    <label for="parent_variable_id" class="form-label">Ana Adım Değişkeni</label>
+                    <select class="form-select" id="parent_variable_id" name="parent_variable_id">
+                        <option value="">Seçiniz...</option>
+                        {% for var in parent_variables %}
+                        <option value="{{ var.id }}">{{ var.name }} ({{ var.var_type }})</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">
+                        Süreç genelinde değişken seçtiyseniz, ana adımdan bir değişken seçmelisiniz.
+                    </small>
+                </div>
+                {% endif %}
+
+                <div class="mb-3" id="default-value-container">
+                    {% if is_mail_step %}
+                    <label for="default_value" class="form-label">Varsayılan Değer</label>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <input type="text" class="form-control mail-input" id="mail_to" placeholder="Alıcılar (virgülle ayırın)">
+                            </div>
+                            <div class="mb-3">
+                                <input type="text" class="form-control mail-input" id="mail_cc" placeholder="CC (virgülle ayırın)">
+                            </div>
+                            <div class="mb-3">
+                                <input type="text" class="form-control mail-input" id="mail_subject" placeholder="Konu">
+                            </div>
+                            <div class="mb-3">
+                                <textarea class="form-control mail-input" id="mail_body" rows="3" placeholder="İçerik"></textarea>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input mail-input" type="checkbox" id="mail_active">
+                                <label class="form-check-label" for="mail_active">Aktif/Pasif</label>
+                            </div>
+                            <input type="hidden" id="default_value" name="default_value">
+                        </div>
+                    </div>
+                    {% else %}
+                    <label for="default_value" class="form-label">Varsayılan Değer</label>
+                    <input type="text" class="form-control" id="default_value" name="default_value" placeholder="Değer girin...">
+                    {% endif %}
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                    <a href="{{ url_for('process_detail', process_id=step.process_id) }}"
+                        class="btn btn-secondary">İptal</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('var_type').addEventListener('change', function () {
+        const defaultValueContainer = document.getElementById('default-value-container');
+        const defaultValueInput = document.getElementById('default_value');
+
+        switch (this.value) {
+            case 'boolean':
+                defaultValueContainer.innerHTML = `
+                <label class="form-label">Varsayılan Değer</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="default_value" id="default_true" value="true">
+                    <label class="form-check-label" for="default_true">Evet</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="default_value" id="default_false" value="false" checked>
+                    <label class="form-check-label" for="default_false">Hayır</label>
+                </div>
+            `;
+                break;
+            case 'number':
+                defaultValueContainer.innerHTML = `
+                <label for="default_value" class="form-label">Varsayılan Değer</label>
+                <input type="number" class="form-control" id="default_value" name="default_value" value="0">
+            `;
+                break;
+            case 'mail_config':
+                defaultValueContainer.innerHTML = `
+                <label class="form-label">Varsayılan Değer</label>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <input type="text" class="form-control mail-input" id="mail_to" placeholder="Alıcılar (virgülle ayırın)">
+                        </div>
+                        <div class="mb-3">
+                            <input type="text" class="form-control mail-input" id="mail_cc" placeholder="CC (virgülle ayırın)">
+                        </div>
+                        <div class="mb-3">
+                            <input type="text" class="form-control mail-input" id="mail_subject" placeholder="Konu">
+                        </div>
+                        <div class="mb-3">
+                            <textarea class="form-control mail-input" id="mail_body" rows="3" placeholder="İçerik"></textarea>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input mail-input" type="checkbox" id="mail_active">
+                            <label class="form-check-label" for="mail_active">Aktif/Pasif</label>
+                        </div>
+                        <input type="hidden" id="default_value" name="default_value">
+                    </div>
+                </div>
+            `;
+
+                // Mail konfigürasyonunu JSON'a dönüştür
+                const mailInputs = document.querySelectorAll('.mail-input');
+                mailInputs.forEach(input => {
+                    input.addEventListener('change', function () {
+                        const config = {
+                            to: document.getElementById('mail_to').value.split(',').map(e => e.trim()).filter(e => e),
+                            cc: document.getElementById('mail_cc').value.split(',').map(e => e.trim()).filter(e => e),
+                            subject: document.getElementById('mail_subject').value,
+                            body: document.getElementById('mail_body').value,
+                            active: document.getElementById('mail_active').checked
+                        };
+                        document.getElementById('default_value').value = JSON.stringify(config);
+                    });
+                });
+                break;
+            default:
+                defaultValueContainer.innerHTML = `
+                <label for="default_value" class="form-label">Varsayılan Değer</label>
+                <input type="text" class="form-control" id="default_value" name="default_value" placeholder="Değer girin...">
+            `;
+        }
+    });
+
+    // Sayfa yüklendiğinde mail konfigürasyonunu JSON'a dönüştür
+    document.addEventListener('DOMContentLoaded', function() {
+        if (document.getElementById('var_type').value === 'mail_config') {
+            const mailInputs = document.querySelectorAll('.mail-input');
+            mailInputs.forEach(input => {
+                input.addEventListener('change', function () {
+                    const config = {
+                        to: document.getElementById('mail_to').value.split(',').map(e => e.trim()).filter(e => e),
+                        cc: document.getElementById('mail_cc').value.split(',').map(e => e.trim()).filter(e => e),
+                        subject: document.getElementById('mail_subject').value,
+                        body: document.getElementById('mail_body').value,
+                        active: document.getElementById('mail_active').checked
+                    };
+                    document.getElementById('default_value').value = JSON.stringify(config);
+                });
+            });
+        }
+    });
+
+    // Kapsam seçimi değiştiğinde ana değişken seçimini göster/gizle
+    const scopeSelect = document.getElementById('scope');
+    if (scopeSelect) {
+        scopeSelect.addEventListener('change', function () {
+            const parentVarContainer = document.getElementById('parent-variable-container');
+            const parentVarSelect = document.getElementById('parent_variable_id');
+
+            if (this.value === 'process_wide') {
+                parentVarContainer.style.display = 'block';
+                parentVarSelect.required = true;
+            } else {
+                parentVarContainer.style.display = 'none';
+                parentVarSelect.required = false;
+            }
+        });
+    }
+</script>
+{% endblock %}

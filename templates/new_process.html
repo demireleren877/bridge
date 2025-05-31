@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Süreç - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Kategoriler</a></li>
+            <li class="breadcrumb-item active">Yeni Süreç</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4">Yeni Süreç Oluştur</h1>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Süreç Adı</label>
+                    <input type="text" class="form-control" id="name" name="name" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Açıklama</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label for="category" class="form-label">Kategori</label>
+                    <select class="form-select" id="category" name="category_id">
+                        <option value="">Kategorisiz</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="year" class="form-label">Yıl</label>
+                    <select class="form-select" id="year" name="year" required>
+                        {% for year in range(current_year + 5, current_year - 5, -1) %}
+                        <option value="{{ year }}" {% if year==current_year %}selected{% endif %}>{{ year }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary me-2">İptal</a>
+                    <button type="submit" class="btn btn-primary">Oluştur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

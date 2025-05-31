@@ -1,0 +1,1521 @@
+{% extends "base.html" %}
+
+{% block title %}{{ process.name }} - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="d-flex align-items-center gap-2">
+            <h1 class="mb-0">{{ process.name }}</h1>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse" title="Filtreleri Göster/Gizle">
+                <i class="bi bi-funnel"></i>
+            </button>
+            <a href="{{ url_for('process_stats', process_id=process.id) }}" class="btn btn-info btn-sm" title="İstatistikler">
+                <i class="bi bi-bar-chart"></i>
+            </a>
+        </div>
+        <p class="text-muted mt-2">{{ process.description }}</p>
+    </div>
+    <div class="col text-end">
+        {% if not process.is_started %}
+        <a href="{{ url_for('new_step', process_id=process.id) }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Yeni Ana Adım
+        </a>
+        {% endif %}
+        <form action="{{ url_for('start_process', process_id=process.id) }}" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-success" {% if process.is_started %}disabled{% endif %}>
+                <i class="bi bi-play-fill"></i> Süreci Başlat
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Filtreleme Bölümü -->
+<div class="collapse" id="filterCollapse">
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="stepNameFilter">
+                        <label for="stepNameFilter">Adım Adı</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="responsibleFilter">
+                        <label for="responsibleFilter">Sorumlu</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-floating">
+                        <select class="form-select" id="statusFilter">
+                            <option value="">Tümü</option>
+                            <option value="not_started">Başlamadı</option>
+                            <option value="waiting">Beklemede</option>
+                            <option value="in_progress">Devam Ediyor</option>
+                            <option value="done">Tamamlandı</option>
+                        </select>
+                        <label for="statusFilter">Durum</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-floating">
+                        <select class="form-select" id="typeFilter">
+                            <option value="">Tümü</option>
+                            <option value="main_step">Ana Adım</option>
+                            <option value="python_script">Python Script</option>
+                            <option value="sql_script">SQL Script</option>
+                            <option value="sql_procedure">SQL Prosedür</option>
+                            <option value="mail">Mail</option>
+                        </select>
+                        <label for="typeFilter">Adım Tipi</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-floating">
+                        <input type="date" class="form-control" id="startDateFilter">
+                        <label for="startDateFilter">Başlangıç Tarihi</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-floating">
+                        <input type="date" class="form-control" id="endDateFilter">
+                        <label for="endDateFilter">Bitiş Tarihi</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 10%">Sıra</th>
+                        <th style="width: 45%">Adım Adı</th>
+                        <th style="width: 20%">Sorumlu</th>
+                        <th style="width: 15%">Durum</th>
+                        <th style="width: 10%">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for step in steps %}
+                    <tr class="{{ 'sub-step' if step.parent_id }}" {% if step.parent_id %}data-parent-id="{{ step.parent_id }}"{% endif %} 
+                        data-step-id="{{ step.id }}" 
+                        data-step-type="{{ step.type }}"
+                        data-file-path="{{ step.file_path or '' }}"
+                        data-completed-at="{{ step.completed_at|format_datetime if step.completed_at else '' }}"
+                        data-completed-at-iso="{{ step.completed_at.strftime('%Y-%m-%d') if step.completed_at else '' }}"
+                        data-description="{{ step.description or '' }}"
+                        data-step-name="{{ step.name }}"
+                        data-responsible="{{ step.responsible or '' }}"
+                        data-status="{{ step.status }}"
+                        style="cursor: pointer;">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if step.parent_id %}
+                                <div class="step-indent" data-level="{{ step.get_full_order().count('.') }}"></div>
+                                {% endif %}
+                                <span>{{ step.get_full_order() }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="step-content">
+                                <div class="d-flex align-items-center">
+                                    <div class="step-name-container d-flex align-items-center">
+                                        <span class="step-name" data-step-id="{{ step.id }}">{{ step.name }}</span>
+                                        <input type="text" class="form-control form-control-sm step-name-input d-none"
+                                            value="{{ step.name }}" data-step-id="{{ step.id }}">
+                                    </div>
+                                    <div class="action-buttons d-flex gap-2 ms-auto">
+                                        {% if not process.is_started %}
+                                        <a href="{{ url_for('new_step', process_id=process.id, parent_id=step.id) }}"
+                                            class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-plus-lg"></i> Alt Adım
+                                        </a>
+                                        {% endif %}
+                                        {% if step.type in ['python_script', 'sql_script', 'mail', 'sql_procedure'] and step.type != 'main_step' %}
+                                        <button type="button" class="btn btn-sm btn-outline-secondary show-variables"
+                                            data-step-id="{{ step.id }}">
+                                            <i class="bi bi-chevron-right me-1"></i> Değişkenler (<span class="variable-count">{{
+                                            step.variables|length }}</span>)
+                                        </button>
+                                        <a href="{{ url_for('new_variable', step_id=step.id) }}"
+                                            class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-plus-lg"></i> Değişken
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% if step.variables %}
+                                <div class="d-none" id="variables-data-{{ step.id }}">
+                                    {% for var in step.variables %}
+                                    {% if var.var_type == 'mail_config' %}
+                                    {% set config = (var.default_value or '{}')|from_json %}
+                                    <div class="card mb-3 mail-variable-card" data-variable-id="{{ var.id }}">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">{{ var.name }}</h6>
+                                            <div class="d-flex align-items-center">
+                                                {{ render_mail_status(var, config, step) }}
+                                                <button type="button" class="btn btn-sm btn-danger delete-variable" data-variable-id="{{ var.id }}">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body mail-details d-none">
+                                            <div class="mb-3">
+                                                <label class="form-label">Alıcılar</label>
+                                                <input type="text" class="form-control" name="mail_to_{{ var.id }}"
+                                                    value="{{ config.get('to', [])|join(', ') }}">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">CC</label>
+                                                <input type="text" class="form-control" name="mail_cc_{{ var.id }}"
+                                                    value="{{ config.get('cc', [])|join(', ') }}">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Konu</label>
+                                                <input type="text" class="form-control"
+                                                    name="mail_subject_{{ var.id }}"
+                                                    value="{{ config.get('subject', '') }}">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">İçerik</label>
+                                                <textarea class="form-control" name="mail_body_{{ var.id }}"
+                                                    rows="4">{{ config.get('body', '') }}</textarea>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox"
+                                                    name="mail_active_{{ var.id }}" {% if config.get('active',
+                                                    False) %}checked{% endif %}>
+                                                <label class="form-check-label">Aktif/Pasif</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <div class="card mb-3" data-variable-id="{{ var.id }}">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">{{ var.name }}</h6>
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-secondary me-2">{{ var.var_type }}</span>
+                                                <button type="button" class="btn btn-sm btn-danger delete-variable" data-variable-id="{{ var.id }}">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Değer</label>
+                                                {% if var.var_type == 'boolean' %}
+                                                <div class="form-check">
+                                                    <input type="checkbox" class="form-check-input variable-value" 
+                                                        name="value_{{ var.id }}"
+                                                        data-variable-id="{{ var.id }}"
+                                                        {% if var.default_value == 'true' %}checked{% endif %}>
+                                                </div>
+                                                {% else %}
+                                                <input type="{{ 'number' if var.var_type == 'number' else 'text' }}" 
+                                                    class="form-control variable-value" 
+                                                    name="value_{{ var.id }}"
+                                                    data-variable-id="{{ var.id }}"
+                                                    value="{{ var.default_value }}">
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="step-responsible-container">
+                                <span class="step-responsible" data-step-id="{{ step.id }}">{{ step.responsible or
+                                    'Sorumlu ekle...' }}</span>
+                                <input type="text" class="form-control form-control-sm step-responsible-input d-none"
+                                    value="{{ step.responsible }}" data-step-id="{{ step.id }}">
+                            </div>
+                        </td>
+                        <td>
+                            <div class="dropdown">
+                                <button class="btn btn-sm dropdown-toggle status-button 
+                                    {% if step.status == 'done' %}btn-success
+                                    {% elif step.status == 'in_progress' %}btn-primary
+                                    {% elif step.status == 'waiting' %}btn-warning
+                                    {% else %}btn-secondary{% endif %}" type="button" data-bs-toggle="dropdown">
+                                    {% if step.status == 'not_started' %}
+                                    Başlamadı
+                                    {% elif step.status == 'waiting' %}
+                                    Beklemede
+                                    {% elif step.status == 'in_progress' %}
+                                    Devam Ediyor
+                                    {% else %}
+                                    Tamamlandı
+                                    {% endif %}
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <form action="{{ url_for('update_step_status', step_id=step.id) }}"
+                                            method="POST">
+                                            <input type="hidden" name="status" value="not_started">
+                                            <button type="submit" class="dropdown-item">Başlamadı</button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('update_step_status', step_id=step.id) }}"
+                                            method="POST">
+                                            <input type="hidden" name="status" value="waiting">
+                                            <button type="submit" class="dropdown-item">Beklemede</button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('update_step_status', step_id=step.id) }}"
+                                            method="POST">
+                                            <input type="hidden" name="status" value="in_progress">
+                                            <button type="submit" class="dropdown-item">Devam Ediyor</button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('update_step_status', step_id=step.id) }}"
+                                            method="POST">
+                                            <input type="hidden" name="status" value="done">
+                                            <button type="submit" class="dropdown-item">Tamamlandı</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                {% if not process.is_started %}
+                                <form action="{{ url_for('delete_step', step_id=step.id) }}" method="POST"
+                                    class="d-inline delete-step-form">
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                {% if process.is_started and step.type != 'main_step' %}
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary execute-step"
+                                        data-step-id="{{ step.id }}" title="Çalıştır">
+                                        <i class="bi bi-play-fill"></i>
+                                    </button>
+                                    {% if step.type == 'mail' %}
+                                    <button class="btn btn-sm btn-outline-info check-mail-status" data-step-id="{{ step.id }}"
+                                        title="Mail Durumunu Güncelle">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Adım Detayları Modal -->
+<div class="modal fade" id="stepDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <div class="d-flex align-items-center gap-2">
+                    <span id="modalStepNo" class="badge bg-primary rounded-pill"></span>
+                    <h5 class="modal-title mb-0" id="modalStepName"></h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Durum ve Tip Bilgisi -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <span id="modalStepType" class="badge"></span>
+                    <span id="modalStepStatus" class="badge"></span>
+                </div>
+
+                <!-- Ana Bilgiler -->
+                <div class="step-details">
+                    <!-- Açıklama -->
+                    <div class="detail-item">
+                        <div class="detail-header">
+                            <i class="bi bi-card-text"></i>
+                            <span>Açıklama</span>
+                        </div>
+                        <textarea id="modalStepDescriptionInput" class="detail-input" rows="3"></textarea>
+                    </div>
+
+                    <!-- Dosya Yolu -->
+                    <div class="detail-item">
+                        <div class="detail-header">
+                            <i class="bi bi-folder2-open"></i>
+                            <span>Dosya Yolu</span>
+                        </div>
+                        <div class="d-flex">
+                            <input type="text" id="modalStepFilePathInput" class="detail-input flex-grow-1">
+                            <button class="btn btn-icon" type="button" id="browseFileBtn">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sorumlu -->
+                    <div class="detail-item">
+                        <div class="detail-header">
+                            <i class="bi bi-person"></i>
+                            <span>Sorumlu</span>
+                        </div>
+                        <input type="text" id="modalStepResponsibleInput" class="detail-input">
+                    </div>
+
+                    <!-- Tamamlanma Tarihi -->
+                    <div class="detail-item">
+                        <div class="detail-header">
+                            <i class="bi bi-calendar-check"></i>
+                            <span>Tamamlanma Tarihi</span>
+                        </div>
+                        <div class="detail-text" id="modalStepCompletedAt">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sonuç Modalı -->
+<div class="modal fade" id="resultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Çalıştırma Sonucu</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resultSuccess" class="alert alert-success d-none" style="word-break: break-all;"></div>
+                <div id="resultError" class="alert alert-danger d-none" style="word-break: break-all;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Değişkenler Modalı -->
+<div class="modal fade" id="variablesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Değişkenler</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('batch_update_variables') }}" method="POST" id="variablesForm">
+                <div class="modal-body">
+                    <input type="hidden" name="step_id" id="modalStepId">
+                    <div class="variables-container p-3">
+                        <!-- Değişkenler buraya yüklenecek -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Mail Modalı -->
+<div class="modal fade" id="mailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Son Gelen Mailler</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="mailList" class="list-group">
+                    <!-- Mailler buraya dinamik olarak eklenecek -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/mail.js') }}"></script>
+<style>
+    .step-indent {
+        display: inline-block;
+    }
+    .step-indent[data-level="1"] { width: 20px; }
+    .step-indent[data-level="2"] { width: 40px; }
+    .step-indent[data-level="3"] { width: 60px; }
+    .editable-field {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .editable-text {
+        flex-grow: 1;
+        padding: 0.375rem 0;
+        min-height: 24px;
+    }
+
+    .edit-btn {
+        padding: 0.25rem 0.5rem;
+    }
+
+    .editable-field .form-control {
+        flex-grow: 1;
+    }
+
+    /* Modal özelleştirmeleri */
+    .modal-content {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .modal-header {
+        padding: 1.25rem 1.5rem;
+    }
+    
+    .modal-body {
+        padding: 0 1.5rem 1.5rem;
+    }
+    
+    .modal-title {
+        font-size: 1.25rem;
+        font-weight: 500;
+    }
+    
+    /* Form Controls */
+    .form-floating > .form-control {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        background-color: var(--bs-body-bg);
+    }
+    
+    .form-floating > .form-control:focus {
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1);
+    }
+    
+    .form-floating > label {
+        color: var(--bs-gray-600);
+        padding-left: 1rem;
+    }
+    
+    .form-floating > .form-control:focus ~ label {
+        color: var(--bs-primary);
+    }
+    
+    /* Badge stilleri */
+    .badge {
+        font-weight: 500;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+    }
+    
+    .badge.rounded-pill {
+        padding: 0.5rem 1rem;
+    }
+    
+    /* Python Script badge */
+    .badge.python-script {
+        background-color: #22c55e !important;
+        color: white;
+    }
+    
+    /* SQL Script badge */
+    .badge.sql-script {
+        background-color: #3b82f6 !important;
+        color: white;
+    }
+    
+    /* SQL Procedure badge */
+    .badge.sql-procedure {
+        background-color: #8b5cf6 !important;
+        color: white;
+    }
+    
+    /* Mail badge */
+    .badge.mail {
+        background-color: #f59e0b !important;
+        color: white;
+    }
+    
+    /* Main Step badge */
+    .badge.main-step {
+        background-color: #6366f1 !important;
+        color: white;
+    }
+    
+    /* Status Badge Colors */
+    #modalStepStatus.badge {
+        background-color: var(--bs-gray-500);
+    }
+    
+    #modalStepStatus.badge[data-status="done"] {
+        background-color: var(--bs-success);
+    }
+    
+    #modalStepStatus.badge[data-status="in_progress"] {
+        background-color: var(--bs-primary);
+    }
+    
+    #modalStepStatus.badge[data-status="waiting"] {
+        background-color: var(--bs-warning);
+    }
+    
+    /* Dark tema için özel stiller */
+    [data-bs-theme="dark"] .modal-content {
+        background-color: var(--bs-dark);
+        border: 1px solid var(--bs-border-color);
+    }
+    
+    [data-bs-theme="dark"] .form-control {
+        background-color: var(--bs-dark);
+        border-color: var(--bs-border-color);
+        color: var(--bs-body-color);
+    }
+    
+    [data-bs-theme="dark"] .form-control:focus {
+        background-color: var(--bs-dark);
+        border-color: var(--bs-primary);
+    }
+    
+    [data-bs-theme="dark"] .form-floating > label {
+        color: var(--bs-gray-400);
+    }
+    
+    [data-bs-theme="dark"] .text-muted {
+        color: var(--bs-gray-500) !important;
+    }
+
+    /* File Path Input Styles */
+    .info-group .form-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .info-group .input-group {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .info-group .form-control {
+        border-radius: 6px 0 0 6px;
+        border-color: var(--bs-border-color);
+        padding: 0.5rem 0.75rem;
+        height: auto;
+    }
+
+    .info-group .form-control:focus {
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1);
+    }
+
+    .info-group .btn {
+        border-color: var(--bs-border-color);
+        color: var(--bs-gray-600);
+        padding: 0.5rem 0.75rem;
+    }
+
+    .info-group .btn:hover {
+        background-color: var(--bs-gray-100);
+        color: var(--bs-gray-700);
+    }
+
+    /* Dark Theme Support */
+    [data-bs-theme="dark"] .info-group .form-control {
+        background-color: var(--bs-dark);
+        border-color: var(--bs-border-color);
+        color: var(--bs-body-color);
+    }
+
+    [data-bs-theme="dark"] .info-group .btn {
+        background-color: var(--bs-dark);
+        border-color: var(--bs-border-color);
+        color: var(--bs-gray-400);
+    }
+
+    [data-bs-theme="dark"] .info-group .btn:hover {
+        background-color: var(--bs-gray-800);
+        color: var(--bs-gray-200);
+    }
+
+    /* Step Details Styles */
+    .step-details {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .detail-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--bs-gray-600);
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .detail-header i {
+        font-size: 1rem;
+    }
+
+    .detail-input {
+        background-color: var(--bs-gray-100);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 0.625rem 0.75rem;
+        font-size: 0.9375rem;
+        color: var(--bs-body-color);
+        transition: all 0.2s ease-in-out;
+        width: 100%;
+    }
+
+    .detail-input:focus {
+        background-color: var(--bs-body-bg);
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1);
+        outline: none;
+    }
+
+    .detail-text {
+        color: var(--bs-gray-600);
+        font-size: 0.9375rem;
+        padding: 0.625rem 0;
+    }
+
+    .btn-icon {
+        padding: 0.625rem;
+        border: 1px solid transparent;
+        background-color: var(--bs-gray-100);
+        color: var(--bs-gray-600);
+        border-radius: 8px;
+        margin-left: 0.5rem;
+    }
+
+    .btn-icon:hover {
+        background-color: var(--bs-gray-200);
+        color: var(--bs-gray-700);
+    }
+
+    /* Dark Theme Support */
+    [data-bs-theme="dark"] .detail-input {
+        background-color: var(--bs-gray-800);
+        color: var(--bs-body-color);
+    }
+
+    [data-bs-theme="dark"] .detail-input:focus {
+        background-color: var(--bs-dark);
+        border-color: var(--bs-primary);
+    }
+
+    [data-bs-theme="dark"] .detail-header,
+    [data-bs-theme="dark"] .detail-text {
+        color: var(--bs-gray-400);
+    }
+
+    [data-bs-theme="dark"] .btn-icon {
+        background-color: var(--bs-gray-800);
+        color: var(--bs-gray-400);
+    }
+
+    [data-bs-theme="dark"] .btn-icon:hover {
+        background-color: var(--bs-gray-700);
+        color: var(--bs-gray-300);
+    }
+
+    /* Process Table Styles */
+    .step-name, .step-responsible {
+        cursor: default !important;
+    }
+
+    .step-content {
+        pointer-events: none;
+    }
+
+    .action-buttons {
+        pointer-events: auto;
+    }
+
+    /* Saving Indicator Style */
+    .saving-indicator {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        color: white;
+        opacity: 0;
+        transform: translateY(-1rem);
+        transition: all 0.3s ease-in-out;
+        z-index: 1060;
+    }
+
+    .saving-indicator.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeMailCards();
+        initializeProcessStartButton();
+    });
+
+    function initializeMailCards() {
+        // Mail kartlarını tıklanabilir yap
+        document.querySelectorAll('.mail-variable-card .card-header').forEach(header => {
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', (e) => {
+                // Silme butonuna tıklandığında kartın açılmasını engelle
+                if (e.target.closest('.delete-variable')) {
+                    return;
+                }
+                const details = header.closest('.card').querySelector('.mail-details');
+                details.classList.toggle('d-none');
+            });
+        });
+
+        // Silme butonlarına event listener ekle
+        document.querySelectorAll('.delete-variable').forEach(button => {
+            button.addEventListener('click', () => {
+                const variableId = button.dataset.variableId;
+                deleteVariable(variableId);
+            });
+        });
+    }
+
+    function initializeProcessStartButton() {
+        const startProcessForm = document.querySelector('form[action*="start_process"]');
+        if (startProcessForm) {
+            startProcessForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    await fetch(startProcessForm.action, {
+                        method: 'POST'
+                    });
+                    // Süreç başlatıldıktan sonra çalıştır butonlarını aktif et
+                    document.querySelectorAll('.execute-step').forEach(button => {
+                        button.disabled = false;
+                    });
+                    // Start Process butonunu devre dışı bırak
+                    startProcessForm.querySelector('button').disabled = true;
+                } catch (error) {
+                    // Hata durumunda sessizce devam et
+                }
+            });
+        }
+    }
+
+    // Adım çalıştırma işlemleri
+    document.querySelectorAll('.execute-step').forEach(button => {
+        button.addEventListener('click', async () => {
+            const stepId = button.dataset.stepId;
+            const row = button.closest('tr');
+            const stepName = row.querySelector('.step-name').textContent;
+            const stepType = row.dataset.stepType;
+            
+            if (!confirm(`"${stepName}" adımını çalıştırmak istediğinizden emin misiniz?`)) {
+                return;
+            }
+            
+            button.disabled = true;
+
+            try {
+                const response = await fetch(`/step/${stepId}/execute`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    if (stepType === 'mail') {
+                        // Mail gönderimi başarılı olduğunda adımı beklemede olarak işaretle
+                        updateStepStatus(stepId, 'waiting', 'Beklemede');
+
+                        // Mail durumlarını güncelle
+                        const mailStatuses = document.querySelectorAll(`tr[data-step-id="${stepId}"] .mail-status, #variables-data-${stepId} .mail-status, #variablesModal .mail-status`);
+                        mailStatuses.forEach(status => {
+                            const variableId = status.dataset.variableId;
+                            const configStr = status.dataset.config;
+                            
+                            let config;
+                            try {
+                                config = JSON.parse(configStr);
+                                // Gönderim zamanını ekle
+                                config.sent_at = new Date().toISOString();
+                                // Config'i güncelle
+                                status.dataset.config = JSON.stringify(config);
+                            } catch (e) {
+                                console.error('Config parsing error:', e);
+                                return;
+                            }
+                            
+                            if (config && config.active) {
+                                status.className = 'mail-status me-2 no-reply text-warning';
+                                status.innerHTML = `
+                                    <div>
+                                        <i class="bi bi-hourglass"></i>
+                                        <span class="status-text">Yanıt Bekleniyor</span>
+                                        <div class="reply-details mt-2">
+                                            <small class="d-block text-muted">Gönderilme:</small>
+                                            <div class="reply-info">
+                                                <span>${new Date().toLocaleString('tr-TR')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                status.className = 'mail-status me-2';
+                                status.innerHTML = `
+                                    <div>
+                                        <i class="bi bi-dash-circle"></i>
+                                        <span class="status-text">Pasif</span>
+                                    </div>
+                                `;
+                            }
+                        });
+
+                        // Sonuç modalını göster
+                        const resultSuccess = document.getElementById('resultSuccess');
+                        const resultError = document.getElementById('resultError');
+                        
+                        if (resultSuccess && resultError) {
+                            resultSuccess.textContent = 'Mail başarıyla gönderildi';
+                            resultSuccess.classList.remove('d-none');
+                            resultError.classList.add('d-none');
+                            
+                            const resultModal = document.getElementById('resultModal');
+                            if (resultModal) {
+                                new bootstrap.Modal(resultModal).show();
+                            }
+                        }
+                        
+                        // Mail durumlarını sunucudan kontrol et
+                        await checkMailReplies(stepId);
+                    } else {
+                        // Mail tipi değilse tamamlandı olarak işaretle
+                        updateStepStatus(stepId, 'done', 'Tamamlandı');
+                        
+                        // Sonuç modalını göster
+                        const resultSuccess = document.getElementById('resultSuccess');
+                        const resultError = document.getElementById('resultError');
+                        
+                        if (resultSuccess && resultError) {
+                            let outputMessage = result.output;
+                            if (outputMessage.includes('Çıktı dosyası:')) {
+                                const [message, filePath] = outputMessage.split('Çıktı dosyası:');
+                                outputMessage = `${message}\nÇıktı dosyası:\n${filePath.trim()}`;
+                            }
+                            resultSuccess.textContent = outputMessage;
+                            resultSuccess.classList.remove('d-none');
+                            resultError.classList.add('d-none');
+                            
+                            const resultModal = document.getElementById('resultModal');
+                            if (resultModal) {
+                                new bootstrap.Modal(resultModal).show();
+                            }
+                        }
+                    }
+                } else {
+                    const resultError = document.getElementById('resultError');
+                    const resultSuccess = document.getElementById('resultSuccess');
+                    
+                    if (resultError && resultSuccess) {
+                        resultError.textContent = `Hata: ${result.error}`;
+                        resultError.classList.remove('d-none');
+                        resultSuccess.classList.add('d-none');
+                        
+                        const resultModal = document.getElementById('resultModal');
+                        if (resultModal) {
+                            new bootstrap.Modal(resultModal).show();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Adım çalıştırılırken hata oluştu:', error);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+
+    // Adım durumunu güncelleme fonksiyonu
+    function updateStepStatus(stepId, status, text) {
+        const stepRow = document.querySelector(`tr[data-step-id="${stepId}"]`);
+        const statusButton = stepRow.querySelector('.status-button');
+        if (statusButton) {
+            statusButton.className = `btn btn-sm dropdown-toggle status-button ${
+                status === 'done' ? 'btn-success' :
+                status === 'in_progress' ? 'btn-primary' :
+                status === 'waiting' ? 'btn-warning' :
+                'btn-secondary'
+            }`;
+            statusButton.textContent = text;
+        }
+    }
+
+    // Değişken silme işlemi
+    async function deleteVariable(variableId) {
+        if (!confirm('Bu değişkeni silmek istediğinizden emin misiniz?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/variable/${variableId}/delete`, {
+                method: 'POST',
+            });
+
+            if (response.redirected) {
+                window.location.href = response.url;
+            }
+        } catch (error) {
+            alert('Değişken silinirken hata oluştu');
+        }
+    }
+
+    // Değişken modalı işlemleri
+    document.querySelectorAll('.show-variables').forEach(button => {
+        button.addEventListener('click', () => {
+            const stepId = button.dataset.stepId;
+            document.getElementById('modalStepId').value = stepId;
+
+            // Değişkenleri yükle
+            const variablesContainer = document.querySelector('.variables-container');
+            const stepVariables = document.getElementById(`variables-data-${stepId}`);
+            if (stepVariables) {
+                variablesContainer.innerHTML = stepVariables.innerHTML;
+
+                // Mail durumlarını senkronize et
+                const mainPageMailStatuses = document.querySelectorAll(`tr[data-step-id="${stepId}"] .mail-status`);
+                mainPageMailStatuses.forEach(mainStatus => {
+                    const subject = mainStatus.dataset.mailSubject;
+                    const modalStatus = variablesContainer.querySelector(`.mail-status[data-mail-subject="${subject}"]`);
+                    if (modalStatus && mainStatus.innerHTML) {
+                        modalStatus.innerHTML = mainStatus.innerHTML;
+                        modalStatus.className = mainStatus.className;
+                    }
+                });
+
+                // Mail kartlarını tıklanabilir yap
+                variablesContainer.querySelectorAll('.mail-variable-card .card-header').forEach(header => {
+                    header.style.cursor = 'pointer';
+                    header.addEventListener('click', (e) => {
+                        // Silme butonuna tıklandığında kartın açılmasını engelle
+                        if (e.target.closest('.delete-variable')) {
+                            return;
+                        }
+                        const details = header.closest('.card').querySelector('.mail-details');
+                        details.classList.toggle('d-none');
+                    });
+                });
+
+                // Değişken değerlerini güncelle
+                variablesContainer.querySelectorAll('.variable-value').forEach(input => {
+                    input.addEventListener('change', async () => {
+                        const variableId = input.dataset.variableId;
+                        const value = input.type === 'checkbox' ? input.checked : input.value;
+
+                        try {
+                            const response = await fetch(`/variable/${variableId}/update`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                },
+                                body: `field=default_value&value=${encodeURIComponent(value)}`
+                            });
+
+                            const result = await response.json();
+
+                            if (!result.success) {
+                                console.error('Değişken güncellenirken hata oluştu');
+                                input.classList.add('is-invalid');
+                                setTimeout(() => input.classList.remove('is-invalid'), 2000);
+                            } else {
+                                // Başarılı güncelleme görsel geri bildirimi
+                                input.classList.add('is-valid');
+                                setTimeout(() => input.classList.remove('is-valid'), 2000);
+
+                                // Ana sayfadaki değişken değerini güncelle
+                                const originalInput = stepVariables.querySelector(`[data-variable-id="${variableId}"] .variable-value`);
+                                if (originalInput) {
+                                    if (input.type === 'checkbox') {
+                                        originalInput.checked = value;
+                                    } else {
+                                        originalInput.value = value;
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Değişken güncellenirken hata oluştu:', error);
+                            input.classList.add('is-invalid');
+                            setTimeout(() => input.classList.remove('is-invalid'), 2000);
+                        }
+                    });
+                });
+
+                // Silme butonlarına event listener ekle
+                variablesContainer.querySelectorAll('.delete-variable').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const variableId = button.dataset.variableId;
+                        deleteVariable(variableId);
+                    });
+                });
+            }
+
+            // Modalı göster
+            new bootstrap.Modal(document.getElementById('variablesModal')).show();
+        });
+    });
+
+    // Modal kapandığında event listener'ları temizle
+    document.getElementById('variablesModal').addEventListener('hidden.bs.modal', function () {
+        const variablesContainer = this.querySelector('.variables-container');
+        variablesContainer.innerHTML = '';
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Modal ve event listener'ları başlat
+        initializeModal();
+
+        // Sayfa yüklendiğinde kaydedilen pozisyona scroll yap
+        const savedStepId = localStorage.getItem('lastViewedStepId');
+        if (savedStepId) {
+            const stepRow = document.querySelector(`tr[data-step-id="${savedStepId}"]`);
+            if (stepRow) {
+                stepRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Scroll pozisyonunu temizle
+                localStorage.removeItem('lastViewedStepId');
+            }
+        }
+    });
+
+    function initializeModal() {
+        // Debug için konsol mesajı
+        console.log('Initializing modal...');
+
+        // Modal elementini al
+        const modalElement = document.getElementById('stepDetailModal');
+        if (!modalElement) {
+            console.error('Modal element not found!');
+            return;
+        }
+
+        // Bootstrap'i kontrol et
+        if (typeof bootstrap === 'undefined') {
+            console.error('Bootstrap is not loaded!');
+            return;
+        }
+
+        // Modal nesnesini oluştur
+        const modal = new bootstrap.Modal(modalElement);
+
+        // Tüm adım satırlarına click event listener ekle
+        const rows = document.querySelectorAll('tr[data-step-id]');
+        console.log('Found rows:', rows.length);
+
+        rows.forEach(row => {
+            row.addEventListener('click', function(e) {
+                // Buton, form veya link tıklamalarını engelle
+                if (e.target.closest('button, form, a, .action-buttons')) {
+                    return;
+                }
+
+                console.log('Row clicked, opening modal...');
+
+                // Adım verilerini al
+                const stepId = this.dataset.stepId;
+                const stepType = this.dataset.stepType;
+                const description = this.dataset.description;
+                const filePath = this.dataset.filePath;
+                const completedAt = this.dataset.completedAt;
+                const completedAtIso = this.dataset.completedAtIso;
+                const stepNo = this.querySelector('td:first-child span')?.textContent || '';
+                const stepName = this.querySelector('.step-name')?.textContent || '';
+                const responsible = this.querySelector('.step-responsible')?.textContent.trim() || '';
+                const status = this.querySelector('.status-button')?.textContent.trim() || '';
+                
+                // Statü rengini belirle
+                let statusClass = 'bg-secondary';
+                let statusText = status.trim().toLowerCase();
+                if (statusText.includes('tamamlandı')) {
+                    statusClass = 'bg-success';
+                } else if (statusText.includes('devam ediyor')) {
+                    statusClass = 'bg-primary';
+                } else if (statusText.includes('beklemede')) {
+                    statusClass = 'bg-warning';
+                }
+
+                // Modal içeriğini güncelle
+                modalElement.dataset.stepId = stepId;
+                document.getElementById('modalStepNo').textContent = stepNo;
+                document.getElementById('modalStepName').textContent = stepName;
+                document.getElementById('modalStepDescriptionInput').value = description || '';
+                document.getElementById('modalStepFilePathInput').value = filePath || '';
+                document.getElementById('modalStepResponsibleInput').value = responsible;
+                
+                // Statü badge'ini güncelle
+                const statusElement = document.getElementById('modalStepStatus');
+                statusElement.textContent = status;
+                statusElement.className = `badge ${statusClass}`;
+                
+                // Tamamlanma tarihini güncelle
+                const completedAtElement = document.getElementById('modalStepCompletedAt');
+                if (completedAt) {
+                    try {
+                        // Tarih string'ini parse et (DD.MM.YYYY HH:mm formatı)
+                        const [datePart, timePart] = completedAt.split(' ');
+                        const [day, month, year] = datePart.split('.');
+                        const [hour, minute] = timePart.split(':');
+                        
+                        // Yeni Date objesi oluştur (ay 0-tabanlı olduğu için -1)
+                        const date = new Date(year, month - 1, day, hour, minute);
+                        
+                        // Tarihi formatla
+                        completedAtElement.textContent = date.toLocaleString('tr-TR', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    } catch (e) {
+                        console.error('Date parsing error:', e);
+                        completedAtElement.textContent = completedAt;
+                    }
+                } else {
+                    completedAtElement.textContent = '-';
+                }
+                
+                const stepTypeElement = document.getElementById('modalStepType');
+                stepTypeElement.textContent = getStepTypeName(stepType);
+                stepTypeElement.className = `badge ${stepType}`;
+
+                // Değişkenler butonunu göster/gizle
+                const viewVariablesBtn = document.getElementById('viewVariables');
+                if (viewVariablesBtn) {
+                    viewVariablesBtn.style.display = stepType === 'main_step' ? 'none' : 'block';
+                }
+
+                // Modalı göster
+                try {
+                    modal.show();
+                    console.log('Modal shown successfully');
+                } catch (error) {
+                    console.error('Error showing modal:', error);
+                }
+            });
+        });
+    }
+
+    function getStepTypeName(type) {
+        const types = {
+            'main_step': 'Ana Adım',
+            'python_script': 'Python Script',
+            'sql_script': 'SQL Script',
+            'sql_procedure': 'SQL Prosedür',
+            'mail': 'Mail'
+        };
+        return types[type] || type;
+    }
+
+    // Otomatik kaydetme için debounce fonksiyonu
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
+    // Kaydetme fonksiyonu
+    async function saveField(input) {
+        const modal = document.getElementById('stepDetailModal');
+        const stepId = modal.dataset.stepId;
+        if (!stepId) {
+            console.error('Step ID not found');
+            return;
+        }
+
+        const fieldMap = {
+            'modalStepDescriptionInput': 'description',
+            'modalStepFilePathInput': 'file_path',
+            'modalStepResponsibleInput': 'responsible'
+        };
+
+        const fieldName = fieldMap[input.id];
+        if (!fieldName) return;
+
+        try {
+            showSavingIndicator('Kaydediliyor...');
+            
+            const response = await fetch(`/step/${stepId}/update`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `field=${fieldName}&value=${encodeURIComponent(input.value)}`
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                // Ana sayfadaki görünümü güncelle
+                const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
+                if (row) {
+                    if (fieldName === 'responsible') {
+                        row.querySelector('.step-responsible').textContent = input.value || 'Sorumlu ekle...';
+                    }
+                    // Dataset'i güncelle
+                    if (fieldName === 'description') {
+                        row.dataset.description = input.value;
+                    } else if (fieldName === 'file_path') {
+                        row.dataset.filePath = input.value;
+                    }
+                }
+                showSavingIndicator('Kaydedildi', 'success');
+            } else {
+                showSavingIndicator('Kaydetme başarısız', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving field:', error);
+            showSavingIndicator('Kaydetme hatası', 'error');
+        }
+    }
+
+    // Kaydetme göstergesi fonksiyonu
+    function showSavingIndicator(message, type = 'info') {
+        let indicator = document.querySelector('.saving-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'saving-indicator';
+            document.body.appendChild(indicator);
+        }
+
+        indicator.textContent = message;
+        indicator.className = `saving-indicator show bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'}`;
+
+        setTimeout(() => {
+            indicator.classList.remove('show');
+        }, 2000);
+    }
+
+    // Input değişikliklerini dinle
+    const debouncedSave = debounce(saveField, 500);
+    document.querySelectorAll('.detail-input').forEach(input => {
+        input.addEventListener('input', () => debouncedSave(input));
+    });
+
+    // Status form submit işleminden önce pozisyonu kaydet
+    document.querySelectorAll('.dropdown-menu form').forEach(form => {
+        form.addEventListener('submit', function() {
+            const stepRow = this.closest('tr');
+            if (stepRow) {
+                const stepId = stepRow.dataset.stepId;
+                localStorage.setItem('lastViewedStepId', stepId);
+            }
+        });
+    });
+
+    // Filtreleme fonksiyonları
+    function applyFilters() {
+        const stepNameFilter = document.getElementById('stepNameFilter').value.toLowerCase();
+        const responsibleFilter = document.getElementById('responsibleFilter').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const typeFilter = document.getElementById('typeFilter').value;
+        const startDate = document.getElementById('startDateFilter').value;
+        const endDate = document.getElementById('endDateFilter').value;
+
+        const rows = document.querySelectorAll('tbody tr');
+        
+        rows.forEach(row => {
+            const stepName = row.dataset.stepName.toLowerCase();
+            const responsible = row.dataset.responsible.toLowerCase();
+            const status = row.dataset.status;
+            const type = row.dataset.stepType;
+            const completedAtIso = row.dataset.completedAtIso;
+
+            const matchesStepName = stepName.includes(stepNameFilter);
+            const matchesResponsible = responsible.includes(responsibleFilter);
+            const matchesStatus = !statusFilter || status === statusFilter;
+            const matchesType = !typeFilter || type === typeFilter;
+            let matchesDate = true;
+            if (startDate && completedAtIso) {
+                matchesDate = completedAtIso >= startDate;
+            }
+            if (endDate && completedAtIso) {
+                matchesDate = matchesDate && completedAtIso <= endDate;
+            }
+            if ((startDate || endDate) && !completedAtIso) {
+                matchesDate = false;
+            }
+
+            // Tüm filtreler eşleşiyorsa satırı göster, değilse gizle
+            if (matchesStepName && matchesResponsible && matchesStatus && matchesType && matchesDate) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    // Filtre input'larına event listener'lar ekle
+    document.getElementById('stepNameFilter').addEventListener('input', applyFilters);
+    document.getElementById('responsibleFilter').addEventListener('input', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('typeFilter').addEventListener('change', applyFilters);
+    document.getElementById('startDateFilter').addEventListener('change', applyFilters);
+    document.getElementById('endDateFilter').addEventListener('change', applyFilters);
+
+    // İstatistikleri hesapla ve göster
+    function updateStatistics() {
+        const rows = Array.from(document.querySelectorAll('tbody tr'));
+        const total = rows.length;
+        let completed = 0;
+        const responsibleMap = {};
+        const typeMap = {};
+        rows.forEach(row => {
+            const status = row.dataset.status;
+            const responsible = row.dataset.responsible || 'Atanmamış';
+            const type = row.dataset.stepType;
+            if (status === 'done') completed++;
+            // Sorumlu
+            if (!responsibleMap[responsible]) responsibleMap[responsible] = 0;
+            if (status === 'done') responsibleMap[responsible]++;
+            // Tip
+            if (!typeMap[type]) typeMap[type] = 0;
+            typeMap[type]++;
+        });
+        document.getElementById('statTotalSteps').textContent = total;
+        document.getElementById('statCompletedSteps').textContent = completed;
+        document.getElementById('statCompletionRate').textContent = total ? `%${Math.round((completed/total)*100)}` : '%0';
+        // Sorumlu listesi
+        const responsibleList = document.getElementById('statResponsibleList');
+        responsibleList.innerHTML = '';
+        Object.entries(responsibleMap).forEach(([name, count]) => {
+            const li = document.createElement('li');
+            li.textContent = `${name}: ${count}`;
+            responsibleList.appendChild(li);
+        });
+        // Tip listesi
+        const typeList = document.getElementById('statTypeList');
+        typeList.innerHTML = '';
+        Object.entries(typeMap).forEach(([type, count]) => {
+            const li = document.createElement('li');
+            li.textContent = `${type}: ${count}`;
+            typeList.appendChild(li);
+        });
+    }
+    // Tablo filtrelendiğinde de güncelle
+    const filterInputs = [
+        'stepNameFilter','responsibleFilter','statusFilter','typeFilter','startDateFilter','endDateFilter'
+    ];
+    filterInputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', updateStatistics);
+        document.getElementById(id).addEventListener('change', updateStatistics);
+    });
+    document.addEventListener('DOMContentLoaded', updateStatistics);
+    // CSV export
+    function tableToCSV() {
+        const rows = Array.from(document.querySelectorAll('table tbody tr')).filter(row => row.style.display !== 'none');
+        const headers = Array.from(document.querySelectorAll('table thead th')).map(th => th.textContent.trim());
+        let csv = headers.join(',') + '\n';
+        rows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td')).map(td => '"'+td.textContent.trim().replace(/"/g,'""')+'"');
+            csv += cells.join(',') + '\n';
+        });
+        return csv;
+    }
+    document.getElementById('exportCsvBtn').addEventListener('click', function() {
+        const csv = tableToCSV();
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'adimlar.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+</script>
+{% endblock %}
+{% macro render_mail_status(var, config, step) %}
+{% set config_json = config|tojson|safe %}
+<div class="mail-status me-2 {% if var.mail_status == 'received' and config.get('active', False) %}has-reply text-success{% elif config.get('active', False) %}no-reply text-warning{% endif %}" 
+    data-mail-subject="{{ config.get('subject', '') }}"
+    data-variable-id="{{ var.id }}"
+    data-config='{{ config_json }}'>
+    {% if not config.get('active', False) %}
+    <div>
+        <i class="bi bi-dash-circle"></i>
+        <span class="status-text">Pasif</span>
+    </div>
+    {% elif var.mail_status == 'received' and get_mail_replies(var.id) %}
+    <div>
+        <i class="bi bi-check-circle-fill"></i>
+        <span class="status-text">Yanıt Alındı</span>
+        {% set replies = get_mail_replies(var.id) %}
+        {% if replies %}
+        <div class="reply-details mt-2">
+            <small class="d-block text-muted">Son yanıt:</small>
+            <div class="reply-info">
+                <strong>{{ replies[-1].sender }}</strong>
+                <span class="mx-1">-</span>
+                <span>{{ replies[-1].received_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div>
+        {% if not step.process.is_started %}
+            <i class="bi bi-clock-history"></i>
+            <span class="status-text">Süreç Başlatılmadı</span>
+        {% elif config.get('sent_at') %}
+            <i class="bi bi-hourglass"></i>
+            <span class="status-text">Yanıt Bekleniyor</span>
+            <div class="reply-details mt-2">
+                <small class="d-block text-muted">Gönderilme:</small>
+                <div class="reply-info">
+                    <span>{{ config.get('sent_at')|format_datetime }}</span>
+                </div>
+            </div>
+        {% else %}
+            <i class="bi bi-envelope"></i>
+            <span class="status-text">Gönderilmedi</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+</body>
+</html>

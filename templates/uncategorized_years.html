@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ super() }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .year-card {
+        transition: transform 0.2s;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        height: 100%;
+    }
+
+    .year-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .calendar-icon {
+        font-size: 2.5rem;
+        color: #0d6efd;
+        margin-bottom: 10px;
+    }
+
+    .process-count {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #f8f9fa;
+        padding: 0.25rem 0.5rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-end mb-4">
+        <div>
+            <a href="{{ url_for('new_process') }}" class="btn btn-success">
+                <i class="bi bi-plus-lg"></i> Yeni Süreç
+            </a>
+        </div>
+    </div>
+
+    <div class="alert alert-info mb-4">
+        Bu bölümde henüz bir kategoriye atanmamış süreçler bulunmaktadır.
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for year in years %}
+        <div class="col">
+            <a href="{{ url_for('uncategorized_processes', year=year) }}" class="text-decoration-none">
+                <div class="card year-card">
+                    <div class="card-body text-center position-relative">
+                        <span class="process-count text-muted">
+                            {{ processes_by_year[year] }} süreç
+                        </span>
+                        <i class="bi bi-calendar-fill calendar-icon"></i>
+                        <h5 class="card-title mb-2">{{ year }}</h5>
+                        <p class="card-text text-muted">{{ year }} yılına ait kategorisiz süreçler</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
