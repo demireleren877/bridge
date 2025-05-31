@@ -7,10 +7,13 @@
     <div class="col">
         <div class="d-flex align-items-center gap-2">
             <h1 class="mb-0">{{ process.name }}</h1>
-            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse" title="Filtreleri Göster/Gizle">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse"
+                data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse"
+                title="Filtreleri Göster/Gizle">
                 <i class="bi bi-funnel"></i>
             </button>
-            <a href="{{ url_for('process_stats', process_id=process.id) }}" class="btn btn-info btn-sm" title="İstatistikler">
+            <a href="{{ url_for('process_stats', process_id=process.id) }}" class="btn btn-info btn-sm"
+                title="İstatistikler">
                 <i class="bi bi-bar-chart"></i>
             </a>
         </div>
@@ -104,16 +107,14 @@
                 </thead>
                 <tbody>
                     {% for step in steps %}
-                    <tr class="{{ 'sub-step' if step.parent_id }}" {% if step.parent_id %}data-parent-id="{{ step.parent_id }}"{% endif %} 
-                        data-step-id="{{ step.id }}" 
-                        data-step-type="{{ step.type }}"
-                        data-file-path="{{ step.file_path or '' }}"
+                    <tr class="{{ 'sub-step' if step.parent_id }}" {% if step.parent_id
+                        %}data-parent-id="{{ step.parent_id }}" {% endif %} data-step-id="{{ step.id }}"
+                        data-step-type="{{ step.type }}" data-file-path="{{ step.file_path or '' }}"
                         data-completed-at="{{ step.completed_at|format_datetime if step.completed_at else '' }}"
                         data-completed-at-iso="{{ step.completed_at.strftime('%Y-%m-%d') if step.completed_at else '' }}"
-                        data-description="{{ step.description or '' }}"
-                        data-step-name="{{ step.name }}"
-                        data-responsible="{{ step.responsible or '' }}"
-                        data-status="{{ step.status }}"
+                        data-description="{{ step.description or '' }}" data-step-name="{{ step.name }}"
+                        data-responsible="{{ step.responsible or '' }}" data-status="{{ step.status }}"
+                        data-deadline="{{ step.deadline.strftime('%Y-%m-%dT%H:%M') if step.deadline else '' }}"
                         style="cursor: pointer;">
                         <td>
                             <div class="d-flex align-items-center">
@@ -138,11 +139,13 @@
                                             <i class="bi bi-plus-lg"></i> Alt Adım
                                         </a>
                                         {% endif %}
-                                        {% if step.type in ['python_script', 'sql_script', 'mail', 'sql_procedure'] and step.type != 'main_step' %}
+                                        {% if step.type in ['python_script', 'sql_script', 'mail', 'sql_procedure'] and
+                                        step.type != 'main_step' %}
                                         <button type="button" class="btn btn-sm btn-outline-secondary show-variables"
                                             data-step-id="{{ step.id }}">
-                                            <i class="bi bi-chevron-right me-1"></i> Değişkenler (<span class="variable-count">{{
-                                            step.variables|length }}</span>)
+                                            <i class="bi bi-chevron-right me-1"></i> Değişkenler (<span
+                                                class="variable-count">{{
+                                                step.variables|length }}</span>)
                                         </button>
                                         <a href="{{ url_for('new_variable', step_id=step.id) }}"
                                             class="btn btn-sm btn-outline-secondary">
@@ -161,7 +164,8 @@
                                             <h6 class="mb-0">{{ var.name }}</h6>
                                             <div class="d-flex align-items-center">
                                                 {{ render_mail_status(var, config, step) }}
-                                                <button type="button" class="btn btn-sm btn-danger delete-variable" data-variable-id="{{ var.id }}">
+                                                <button type="button" class="btn btn-sm btn-danger delete-variable"
+                                                    data-variable-id="{{ var.id }}">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
                                             </div>
@@ -179,8 +183,7 @@
                                             </div>
                                             <div class="mb-3">
                                                 <label class="form-label">Konu</label>
-                                                <input type="text" class="form-control"
-                                                    name="mail_subject_{{ var.id }}"
+                                                <input type="text" class="form-control" name="mail_subject_{{ var.id }}"
                                                     value="{{ config.get('subject', '') }}">
                                             </div>
                                             <div class="mb-3">
@@ -190,8 +193,8 @@
                                             </div>
                                             <div class="form-check form-switch">
                                                 <input class="form-check-input" type="checkbox"
-                                                    name="mail_active_{{ var.id }}" {% if config.get('active',
-                                                    False) %}checked{% endif %}>
+                                                    name="mail_active_{{ var.id }}" {% if config.get('active', False)
+                                                    %}checked{% endif %}>
                                                 <label class="form-check-label">Aktif/Pasif</label>
                                             </div>
                                         </div>
@@ -202,7 +205,8 @@
                                             <h6 class="mb-0">{{ var.name }}</h6>
                                             <div class="d-flex align-items-center">
                                                 <span class="badge bg-secondary me-2">{{ var.var_type }}</span>
-                                                <button type="button" class="btn btn-sm btn-danger delete-variable" data-variable-id="{{ var.id }}">
+                                                <button type="button" class="btn btn-sm btn-danger delete-variable"
+                                                    data-variable-id="{{ var.id }}">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
                                             </div>
@@ -212,17 +216,14 @@
                                                 <label class="form-label">Değer</label>
                                                 {% if var.var_type == 'boolean' %}
                                                 <div class="form-check">
-                                                    <input type="checkbox" class="form-check-input variable-value" 
-                                                        name="value_{{ var.id }}"
-                                                        data-variable-id="{{ var.id }}"
-                                                        {% if var.default_value == 'true' %}checked{% endif %}>
+                                                    <input type="checkbox" class="form-check-input variable-value"
+                                                        name="value_{{ var.id }}" data-variable-id="{{ var.id }}" {% if
+                                                        var.default_value=='true' %}checked{% endif %}>
                                                 </div>
                                                 {% else %}
-                                                <input type="{{ 'number' if var.var_type == 'number' else 'text' }}" 
-                                                    class="form-control variable-value" 
-                                                    name="value_{{ var.id }}"
-                                                    data-variable-id="{{ var.id }}"
-                                                    value="{{ var.default_value }}">
+                                                <input type="{{ 'number' if var.var_type == 'number' else 'text' }}"
+                                                    class="form-control variable-value" name="value_{{ var.id }}"
+                                                    data-variable-id="{{ var.id }}" value="{{ var.default_value }}">
                                                 {% endif %}
                                             </div>
                                         </div>
@@ -307,8 +308,8 @@
                                         <i class="bi bi-play-fill"></i>
                                     </button>
                                     {% if step.type == 'mail' %}
-                                    <button class="btn btn-sm btn-outline-info check-mail-status" data-step-id="{{ step.id }}"
-                                        title="Mail Durumunu Güncelle">
+                                    <button class="btn btn-sm btn-outline-info check-mail-status"
+                                        data-step-id="{{ step.id }}" title="Mail Durumunu Güncelle">
                                         <i class="bi bi-arrow-clockwise"></i>
                                     </button>
                                     {% endif %}
@@ -336,53 +337,40 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <!-- Durum ve Tip Bilgisi -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <span id="modalStepType" class="badge"></span>
-                    <span id="modalStepStatus" class="badge"></span>
-                </div>
-
                 <!-- Ana Bilgiler -->
                 <div class="step-details">
-                    <!-- Açıklama -->
-                    <div class="detail-item">
-                        <div class="detail-header">
-                            <i class="bi bi-card-text"></i>
-                            <span>Açıklama</span>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Adım Adı</label>
+                                <input type="text" class="form-control" id="modalStepNameInput" name="name">
+                            </div>
                         </div>
-                        <textarea id="modalStepDescriptionInput" class="detail-input" rows="3"></textarea>
-                    </div>
-
-                    <!-- Dosya Yolu -->
-                    <div class="detail-item">
-                        <div class="detail-header">
-                            <i class="bi bi-folder2-open"></i>
-                            <span>Dosya Yolu</span>
-                        </div>
-                        <div class="d-flex">
-                            <input type="text" id="modalStepFilePathInput" class="detail-input flex-grow-1">
-                            <button class="btn btn-icon" type="button" id="browseFileBtn">
-                                <i class="bi bi-three-dots"></i>
-                            </button>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Sorumlu</label>
+                                <input type="text" class="form-control" id="modalStepResponsibleInput"
+                                    name="responsible">
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Sorumlu -->
-                    <div class="detail-item">
-                        <div class="detail-header">
-                            <i class="bi bi-person"></i>
-                            <span>Sorumlu</span>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="form-group">
+                                <label class="form-label">Deadline</label>
+                                <input type="datetime-local" class="form-control" id="modalStepDeadlineInput"
+                                    name="deadline">
+                            </div>
                         </div>
-                        <input type="text" id="modalStepResponsibleInput" class="detail-input">
                     </div>
-
-                    <!-- Tamamlanma Tarihi -->
-                    <div class="detail-item">
-                        <div class="detail-header">
-                            <i class="bi bi-calendar-check"></i>
-                            <span>Tamamlanma Tarihi</span>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="form-group">
+                                <label class="form-label">Açıklama</label>
+                                <textarea class="form-control" id="modalStepDescriptionInput" name="description"
+                                    rows="3"></textarea>
+                            </div>
                         </div>
-                        <div class="detail-text" id="modalStepCompletedAt">-</div>
                     </div>
                 </div>
             </div>
@@ -464,9 +452,19 @@
     .step-indent {
         display: inline-block;
     }
-    .step-indent[data-level="1"] { width: 20px; }
-    .step-indent[data-level="2"] { width: 40px; }
-    .step-indent[data-level="3"] { width: 60px; }
+
+    .step-indent[data-level="1"] {
+        width: 20px;
+    }
+
+    .step-indent[data-level="2"] {
+        width: 40px;
+    }
+
+    .step-indent[data-level="3"] {
+        width: 60px;
+    }
+
     .editable-field {
         display: flex;
         align-items: flex-start;
@@ -493,120 +491,120 @@
         border-radius: 16px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     }
-    
+
     .modal-header {
         padding: 1.25rem 1.5rem;
     }
-    
+
     .modal-body {
         padding: 0 1.5rem 1.5rem;
     }
-    
+
     .modal-title {
         font-size: 1.25rem;
         font-weight: 500;
     }
-    
+
     /* Form Controls */
-    .form-floating > .form-control {
+    .form-floating>.form-control {
         border: 1px solid var(--bs-border-color);
         border-radius: 8px;
         background-color: var(--bs-body-bg);
     }
-    
-    .form-floating > .form-control:focus {
+
+    .form-floating>.form-control:focus {
         border-color: var(--bs-primary);
         box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1);
     }
-    
-    .form-floating > label {
+
+    .form-floating>label {
         color: var(--bs-gray-600);
         padding-left: 1rem;
     }
-    
-    .form-floating > .form-control:focus ~ label {
+
+    .form-floating>.form-control:focus~label {
         color: var(--bs-primary);
     }
-    
+
     /* Badge stilleri */
     .badge {
         font-weight: 500;
         padding: 0.5rem 0.75rem;
         border-radius: 6px;
     }
-    
+
     .badge.rounded-pill {
         padding: 0.5rem 1rem;
     }
-    
+
     /* Python Script badge */
     .badge.python-script {
         background-color: #22c55e !important;
         color: white;
     }
-    
+
     /* SQL Script badge */
     .badge.sql-script {
         background-color: #3b82f6 !important;
         color: white;
     }
-    
+
     /* SQL Procedure badge */
     .badge.sql-procedure {
         background-color: #8b5cf6 !important;
         color: white;
     }
-    
+
     /* Mail badge */
     .badge.mail {
         background-color: #f59e0b !important;
         color: white;
     }
-    
+
     /* Main Step badge */
     .badge.main-step {
         background-color: #6366f1 !important;
         color: white;
     }
-    
+
     /* Status Badge Colors */
     #modalStepStatus.badge {
         background-color: var(--bs-gray-500);
     }
-    
+
     #modalStepStatus.badge[data-status="done"] {
         background-color: var(--bs-success);
     }
-    
+
     #modalStepStatus.badge[data-status="in_progress"] {
         background-color: var(--bs-primary);
     }
-    
+
     #modalStepStatus.badge[data-status="waiting"] {
         background-color: var(--bs-warning);
     }
-    
+
     /* Dark tema için özel stiller */
     [data-bs-theme="dark"] .modal-content {
         background-color: var(--bs-dark);
         border: 1px solid var(--bs-border-color);
     }
-    
+
     [data-bs-theme="dark"] .form-control {
         background-color: var(--bs-dark);
         border-color: var(--bs-border-color);
         color: var(--bs-body-color);
     }
-    
+
     [data-bs-theme="dark"] .form-control:focus {
         background-color: var(--bs-dark);
         border-color: var(--bs-primary);
     }
-    
-    [data-bs-theme="dark"] .form-floating > label {
+
+    [data-bs-theme="dark"] .form-floating>label {
         color: var(--bs-gray-400);
     }
-    
+
     [data-bs-theme="dark"] .text-muted {
         color: var(--bs-gray-500) !important;
     }
@@ -754,7 +752,8 @@
     }
 
     /* Process Table Styles */
-    .step-name, .step-responsible {
+    .step-name,
+    .step-responsible {
         cursor: default !important;
     }
 
@@ -844,11 +843,11 @@
             const row = button.closest('tr');
             const stepName = row.querySelector('.step-name').textContent;
             const stepType = row.dataset.stepType;
-            
+
             if (!confirm(`"${stepName}" adımını çalıştırmak istediğinizden emin misiniz?`)) {
                 return;
             }
-            
+
             button.disabled = true;
 
             try {
@@ -867,7 +866,7 @@
                         mailStatuses.forEach(status => {
                             const variableId = status.dataset.variableId;
                             const configStr = status.dataset.config;
-                            
+
                             let config;
                             try {
                                 config = JSON.parse(configStr);
@@ -879,7 +878,7 @@
                                 console.error('Config parsing error:', e);
                                 return;
                             }
-                            
+
                             if (config && config.active) {
                                 status.className = 'mail-status me-2 no-reply text-warning';
                                 status.innerHTML = `
@@ -908,28 +907,28 @@
                         // Sonuç modalını göster
                         const resultSuccess = document.getElementById('resultSuccess');
                         const resultError = document.getElementById('resultError');
-                        
+
                         if (resultSuccess && resultError) {
                             resultSuccess.textContent = 'Mail başarıyla gönderildi';
                             resultSuccess.classList.remove('d-none');
                             resultError.classList.add('d-none');
-                            
+
                             const resultModal = document.getElementById('resultModal');
                             if (resultModal) {
                                 new bootstrap.Modal(resultModal).show();
                             }
                         }
-                        
+
                         // Mail durumlarını sunucudan kontrol et
                         await checkMailReplies(stepId);
                     } else {
                         // Mail tipi değilse tamamlandı olarak işaretle
                         updateStepStatus(stepId, 'done', 'Tamamlandı');
-                        
+
                         // Sonuç modalını göster
                         const resultSuccess = document.getElementById('resultSuccess');
                         const resultError = document.getElementById('resultError');
-                        
+
                         if (resultSuccess && resultError) {
                             let outputMessage = result.output;
                             if (outputMessage.includes('Çıktı dosyası:')) {
@@ -939,7 +938,7 @@
                             resultSuccess.textContent = outputMessage;
                             resultSuccess.classList.remove('d-none');
                             resultError.classList.add('d-none');
-                            
+
                             const resultModal = document.getElementById('resultModal');
                             if (resultModal) {
                                 new bootstrap.Modal(resultModal).show();
@@ -949,12 +948,12 @@
                 } else {
                     const resultError = document.getElementById('resultError');
                     const resultSuccess = document.getElementById('resultSuccess');
-                    
+
                     if (resultError && resultSuccess) {
                         resultError.textContent = `Hata: ${result.error}`;
                         resultError.classList.remove('d-none');
                         resultSuccess.classList.add('d-none');
-                        
+
                         const resultModal = document.getElementById('resultModal');
                         if (resultModal) {
                             new bootstrap.Modal(resultModal).show();
@@ -974,12 +973,11 @@
         const stepRow = document.querySelector(`tr[data-step-id="${stepId}"]`);
         const statusButton = stepRow.querySelector('.status-button');
         if (statusButton) {
-            statusButton.className = `btn btn-sm dropdown-toggle status-button ${
-                status === 'done' ? 'btn-success' :
+            statusButton.className = `btn btn-sm dropdown-toggle status-button ${status === 'done' ? 'btn-success' :
                 status === 'in_progress' ? 'btn-primary' :
-                status === 'waiting' ? 'btn-warning' :
-                'btn-secondary'
-            }`;
+                    status === 'waiting' ? 'btn-warning' :
+                        'btn-secondary'
+                }`;
             statusButton.textContent = text;
         }
     }
@@ -1103,7 +1101,7 @@
         variablesContainer.innerHTML = '';
     });
 
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         // Modal ve event listener'ları başlat
         initializeModal();
 
@@ -1144,7 +1142,7 @@
         console.log('Found rows:', rows.length);
 
         rows.forEach(row => {
-            row.addEventListener('click', function(e) {
+            row.addEventListener('click', function (e) {
                 // Buton, form veya link tıklamalarını engelle
                 if (e.target.closest('button, form, a, .action-buttons')) {
                     return;
@@ -1162,69 +1160,17 @@
                 const stepNo = this.querySelector('td:first-child span')?.textContent || '';
                 const stepName = this.querySelector('.step-name')?.textContent || '';
                 const responsible = this.querySelector('.step-responsible')?.textContent.trim() || '';
-                const status = this.querySelector('.status-button')?.textContent.trim() || '';
-                
-                // Statü rengini belirle
-                let statusClass = 'bg-secondary';
-                let statusText = status.trim().toLowerCase();
-                if (statusText.includes('tamamlandı')) {
-                    statusClass = 'bg-success';
-                } else if (statusText.includes('devam ediyor')) {
-                    statusClass = 'bg-primary';
-                } else if (statusText.includes('beklemede')) {
-                    statusClass = 'bg-warning';
-                }
+                const status = this.dataset.status;
+                const deadline = this.dataset.deadline;
 
-                // Modal içeriğini güncelle
+                // Modal içindeki form alanlarını doldur
                 modalElement.dataset.stepId = stepId;
                 document.getElementById('modalStepNo').textContent = stepNo;
                 document.getElementById('modalStepName').textContent = stepName;
+                document.getElementById('modalStepNameInput').value = stepName;
                 document.getElementById('modalStepDescriptionInput').value = description || '';
-                document.getElementById('modalStepFilePathInput').value = filePath || '';
-                document.getElementById('modalStepResponsibleInput').value = responsible;
-                
-                // Statü badge'ini güncelle
-                const statusElement = document.getElementById('modalStepStatus');
-                statusElement.textContent = status;
-                statusElement.className = `badge ${statusClass}`;
-                
-                // Tamamlanma tarihini güncelle
-                const completedAtElement = document.getElementById('modalStepCompletedAt');
-                if (completedAt) {
-                    try {
-                        // Tarih string'ini parse et (DD.MM.YYYY HH:mm formatı)
-                        const [datePart, timePart] = completedAt.split(' ');
-                        const [day, month, year] = datePart.split('.');
-                        const [hour, minute] = timePart.split(':');
-                        
-                        // Yeni Date objesi oluştur (ay 0-tabanlı olduğu için -1)
-                        const date = new Date(year, month - 1, day, hour, minute);
-                        
-                        // Tarihi formatla
-                        completedAtElement.textContent = date.toLocaleString('tr-TR', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                    } catch (e) {
-                        console.error('Date parsing error:', e);
-                        completedAtElement.textContent = completedAt;
-                    }
-                } else {
-                    completedAtElement.textContent = '-';
-                }
-                
-                const stepTypeElement = document.getElementById('modalStepType');
-                stepTypeElement.textContent = getStepTypeName(stepType);
-                stepTypeElement.className = `badge ${stepType}`;
-
-                // Değişkenler butonunu göster/gizle
-                const viewVariablesBtn = document.getElementById('viewVariables');
-                if (viewVariablesBtn) {
-                    viewVariablesBtn.style.display = stepType === 'main_step' ? 'none' : 'block';
-                }
+                document.getElementById('modalStepResponsibleInput').value = responsible === 'Sorumlu ekle...' ? '' : responsible;
+                document.getElementById('modalStepDeadlineInput').value = deadline || '';
 
                 // Modalı göster
                 try {
@@ -1232,6 +1178,62 @@
                     console.log('Modal shown successfully');
                 } catch (error) {
                     console.error('Error showing modal:', error);
+                }
+            });
+        });
+
+        // Form alanlarının değişikliklerini dinle ve otomatik kaydet
+        const formInputs = modalElement.querySelectorAll('input, textarea');
+        formInputs.forEach(input => {
+            input.addEventListener('change', async function () {
+                const stepId = modalElement.dataset.stepId;
+                const field = this.name;
+                const value = this.value;
+
+                try {
+                    let response;
+
+                    // Deadline için özel endpoint kullan
+                    if (field === 'deadline') {
+                        response = await fetch(`/step/${stepId}/update_deadline`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: `deadline=${encodeURIComponent(value)}`
+                        });
+                    } else {
+                        response = await fetch(`/step/${stepId}/update`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: `field=${field}&value=${encodeURIComponent(value)}`
+                        });
+                    }
+
+                    const result = await response.json();
+                    if (result.success) {
+                        // Ana sayfadaki görünümü güncelle
+                        const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
+                        if (row) {
+                            if (field === 'name') {
+                                row.querySelector('.step-name').textContent = value;
+                            } else if (field === 'responsible') {
+                                row.querySelector('.step-responsible').textContent = value || 'Sorumlu ekle...';
+                            } else if (field === 'description') {
+                                row.dataset.description = value;
+                            } else if (field === 'deadline') {
+                                row.dataset.deadline = value;
+                            }
+                        }
+                        showSavingIndicator('Kaydedildi', 'success');
+                    } else {
+                        showSavingIndicator('Kaydetme başarısız', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error saving field:', error);
+                    showSavingIndicator('Kaydetme hatası', 'error');
                 }
             });
         });
@@ -1251,7 +1253,7 @@
     // Otomatik kaydetme için debounce fonksiyonu
     function debounce(func, wait) {
         let timeout;
-        return function(...args) {
+        return function (...args) {
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(this, args), wait);
         };
@@ -1277,7 +1279,7 @@
 
         try {
             showSavingIndicator('Kaydediliyor...');
-            
+
             const response = await fetch(`/step/${stepId}/update`, {
                 method: 'POST',
                 headers: {
@@ -1336,7 +1338,7 @@
 
     // Status form submit işleminden önce pozisyonu kaydet
     document.querySelectorAll('.dropdown-menu form').forEach(form => {
-        form.addEventListener('submit', function() {
+        form.addEventListener('submit', function () {
             const stepRow = this.closest('tr');
             if (stepRow) {
                 const stepId = stepRow.dataset.stepId;
@@ -1355,7 +1357,7 @@
         const endDate = document.getElementById('endDateFilter').value;
 
         const rows = document.querySelectorAll('tbody tr');
-        
+
         rows.forEach(row => {
             const stepName = row.dataset.stepName.toLowerCase();
             const responsible = row.dataset.responsible.toLowerCase();
@@ -1416,7 +1418,7 @@
         });
         document.getElementById('statTotalSteps').textContent = total;
         document.getElementById('statCompletedSteps').textContent = completed;
-        document.getElementById('statCompletionRate').textContent = total ? `%${Math.round((completed/total)*100)}` : '%0';
+        document.getElementById('statCompletionRate').textContent = total ? `%${Math.round((completed / total) * 100)}` : '%0';
         // Sorumlu listesi
         const responsibleList = document.getElementById('statResponsibleList');
         responsibleList.innerHTML = '';
@@ -1436,7 +1438,7 @@
     }
     // Tablo filtrelendiğinde de güncelle
     const filterInputs = [
-        'stepNameFilter','responsibleFilter','statusFilter','typeFilter','startDateFilter','endDateFilter'
+        'stepNameFilter', 'responsibleFilter', 'statusFilter', 'typeFilter', 'startDateFilter', 'endDateFilter'
     ];
     filterInputs.forEach(id => {
         document.getElementById(id).addEventListener('input', updateStatistics);
@@ -1449,14 +1451,14 @@
         const headers = Array.from(document.querySelectorAll('table thead th')).map(th => th.textContent.trim());
         let csv = headers.join(',') + '\n';
         rows.forEach(row => {
-            const cells = Array.from(row.querySelectorAll('td')).map(td => '"'+td.textContent.trim().replace(/"/g,'""')+'"');
+            const cells = Array.from(row.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g, '""') + '"');
             csv += cells.join(',') + '\n';
         });
         return csv;
     }
-    document.getElementById('exportCsvBtn').addEventListener('click', function() {
+    document.getElementById('exportCsvBtn').addEventListener('click', function () {
         const csv = tableToCSV();
-        const blob = new Blob([csv], {type: 'text/csv'});
+        const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1466,14 +1468,38 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     });
+
+    // Deadline değişikliği için event listener
+    document.querySelectorAll('input[type="datetime-local"][data-field="deadline"]').forEach(input => {
+        input.addEventListener('change', function () {
+            const stepId = this.dataset.stepId;
+            const formData = new FormData();
+            formData.append('deadline', this.value);
+
+            fetch(`/step/${stepId}/update_deadline`, {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Başarılı', 'Deadline başarıyla güncellendi', 'success');
+                    } else {
+                        showToast('Hata', 'Deadline güncellenirken bir hata oluştu', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Hata', 'Deadline güncellenirken bir hata oluştu', 'error');
+                });
+        });
+    });
 </script>
 {% endblock %}
 {% macro render_mail_status(var, config, step) %}
 {% set config_json = config|tojson|safe %}
-<div class="mail-status me-2 {% if var.mail_status == 'received' and config.get('active', False) %}has-reply text-success{% elif config.get('active', False) %}no-reply text-warning{% endif %}" 
-    data-mail-subject="{{ config.get('subject', '') }}"
-    data-variable-id="{{ var.id }}"
-    data-config='{{ config_json }}'>
+<div class="mail-status me-2 {% if var.mail_status == 'received' and config.get('active', False) %}has-reply text-success{% elif config.get('active', False) %}no-reply text-warning{% endif %}"
+    data-mail-subject="{{ config.get('subject', '') }}" data-variable-id="{{ var.id }}" data-config='{{ config_json }}'>
     {% if not config.get('active', False) %}
     <div>
         <i class="bi bi-dash-circle"></i>
@@ -1498,24 +1524,25 @@
     {% else %}
     <div>
         {% if not step.process.is_started %}
-            <i class="bi bi-clock-history"></i>
-            <span class="status-text">Süreç Başlatılmadı</span>
+        <i class="bi bi-clock-history"></i>
+        <span class="status-text">Süreç Başlatılmadı</span>
         {% elif config.get('sent_at') %}
-            <i class="bi bi-hourglass"></i>
-            <span class="status-text">Yanıt Bekleniyor</span>
-            <div class="reply-details mt-2">
-                <small class="d-block text-muted">Gönderilme:</small>
-                <div class="reply-info">
-                    <span>{{ config.get('sent_at')|format_datetime }}</span>
-                </div>
+        <i class="bi bi-hourglass"></i>
+        <span class="status-text">Yanıt Bekleniyor</span>
+        <div class="reply-details mt-2">
+            <small class="d-block text-muted">Gönderilme:</small>
+            <div class="reply-info">
+                <span>{{ config.get('sent_at')|format_datetime }}</span>
             </div>
+        </div>
         {% else %}
-            <i class="bi bi-envelope"></i>
-            <span class="status-text">Gönderilmedi</span>
+        <i class="bi bi-envelope"></i>
+        <span class="status-text">Gönderilmedi</span>
         {% endif %}
     </div>
     {% endif %}
 </div>
 {% endmacro %}
 </body>
+
 </html>

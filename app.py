@@ -141,7 +141,8 @@ class Step(db.Model):
     process_id = db.Column(db.Integer, db.ForeignKey('process.id', ondelete='CASCADE'), nullable=False)
     responsible = db.Column(db.String(100))
     status = db.Column(db.String(20), default='not_started')
-    version = db.Column(db.Integer, nullable=False, default=1)  # Versiyon kontrolü için
+    version = db.Column(db.Integer, nullable=False, default=1)
+    deadline = db.Column(db.DateTime, nullable=True)
     dependencies = db.relationship('StepDependency', 
                                  foreign_keys='StepDependency.step_id',
                                  backref='dependent_step', 
@@ -323,7 +324,10 @@ def process_detail(process_id):
     for main_step in main_steps:
         organized_steps.append(main_step)
         organized_steps.extend(get_substeps_recursive(main_step.id))    
-    return render_template('process_detail.html', process=process, steps=organized_steps)
+    return render_template('process_detail.html', 
+                         process=process, 
+                         steps=organized_steps,
+                         now=datetime.now())
 
 def get_substeps_recursive(parent_id):
     substeps = []
@@ -1147,11 +1151,23 @@ def get_process_flowchart(process_id):
 
 @app.route('/api/calendar/completed-steps')
 def get_completed_steps():
-    # Sadece parent_id'si None olan (ana) adımları al
-    steps = Step.query.filter(
-        Step.completed_at.isnot(None),
-        Step.parent_id.is_(None)  # Ana adımları filtrele
-    ).all()
+    # URL'den sorumlu kişi parametresini al
+    responsible = request.args.get('responsible', None)
+    
+    # Base query - hem tamamlanmış hem de deadline'ı olan adımları al
+    query = Step.query.filter(
+        Step.parent_id.is_(None),  # Ana adımları filtrele
+        db.or_(
+            Step.completed_at.isnot(None),  # Tamamlanmış adımlar
+            Step.deadline.isnot(None)  # Deadline'ı olan adımlar
+        )
+    )
+    
+    # Eğer sorumlu kişi filtresi varsa, query'e ekle
+    if responsible:
+        query = query.filter(Step.responsible == responsible)
+    
+    steps = query.all()
     
     events = []
     
@@ -1159,28 +1175,90 @@ def get_completed_steps():
         # Ana adımın adını ve süreç adını birleştir
         step_title = f"{step.process.name} - {step.name}"
         
-        # Tamamlanma zamanını kullan
-        completion_time = step.completed_at
-        
-        events.append({
-            'id': step.id,
-            'title': step_title,
-            'start': completion_time.strftime('%Y-%m-%dT%H:%M:%S'),  # ISO format without timezone
-            'display': 'block',  # Blok görünüm kullan
-            'allDay': False,
-            'textColor': 'white',
-            'extendedProps': {
-                'processId': step.process_id,
-                'processName': step.process.name,
-                'stepType': step.type,
-                'description': step.description or '',
-                'responsible': step.responsible or '',
-                'completionTime': completion_time.strftime('%H:%M'),
-                'completionDate': completion_time.strftime('%d.%m.%Y %H:%M')
+        # Eğer adım tamamlanmışsa
+        if step.completed_at:
+            completion_time = step.completed_at
+            event = {
+                'id': step.id,
+                'title': step_title,
+                'start': completion_time.strftime('%Y-%m-%dT%H:%M:%S'),
+                'display': 'block',
+                'allDay': False,
+                'backgroundColor': 'rgba(40, 167, 69, 0.3)',  # Yeşil renk yarı saydam
+                'borderColor': '#28a745',  # Yeşil renk
+                'classNames': ['completed-event', 'striped-background'],
+                'extendedProps': {
+                    'processId': step.process_id,
+                    'processName': step.process.name,
+                    'stepType': step.type,
+                    'description': step.description or '',
+                    'responsible': step.responsible or '',
+                    'completionTime': completion_time.strftime('%H:%M'),
+                    'completionDate': completion_time.strftime('%d.%m.%Y %H:%M'),
+                    'status': 'completed'
+                }
             }
-        })
+            events.append(event)
+        
+        # Eğer deadline varsa ve adım tamamlanmamışsa
+        if step.deadline and not step.completed_at:
+            now = datetime.now()
+            is_overdue = step.deadline < now
+            
+            event = {
+                'id': step.id,
+                'title': step_title,
+                'start': step.deadline.strftime('%Y-%m-%dT%H:%M:%S'),
+                'display': 'block',
+                'allDay': False,
+                'backgroundColor': 'rgba(220, 53, 69, 0.3)' if is_overdue else 'rgba(255, 193, 7, 0.3)',  # Gecikmiş: kırmızı, Normal: sarı
+                'borderColor': '#dc3545' if is_overdue else '#ffc107',  # Gecikmiş: kırmızı, Normal: sarı
+                'classNames': ['deadline-event', 'striped-background', 'overdue-event' if is_overdue else ''],
+                'extendedProps': {
+                    'processId': step.process_id,
+                    'processName': step.process.name,
+                    'stepType': step.type,
+                    'description': step.description or '',
+                    'responsible': step.responsible or '',
+                    'deadline': step.deadline.strftime('%d.%m.%Y %H:%M'),
+                    'status': 'overdue' if is_overdue else 'pending'
+                }
+            }
+            events.append(event)
     
     return jsonify(events)
+
+@app.route('/step/<int:step_id>/update_deadline', methods=['POST'])
+def update_step_deadline(step_id):
+    step = Step.query.get_or_404(step_id)
+    deadline_str = request.form.get('deadline')
+    
+    try:
+        if deadline_str:
+            deadline = datetime.strptime(deadline_str, '%Y-%m-%dT%H:%M')
+            step.deadline = deadline
+        else:
+            step.deadline = None
+            
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/calendar/responsibles')
+def get_responsibles():
+    # Tüm sorumlu kişileri al (tekrarsız)
+    responsibles = db.session.query(Step.responsible)\
+        .filter(Step.responsible.isnot(None))\
+        .distinct()\
+        .order_by(Step.responsible)\
+        .all()
+    
+    # Liste formatına çevir
+    responsible_list = [r[0] for r in responsibles if r[0]]  # Boş değerleri filtrele
+    
+    return jsonify(responsible_list)
 
 @app.route('/process/calendar')
 def process_calendar():

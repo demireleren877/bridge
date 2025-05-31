@@ -14,13 +14,13 @@
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     }
-    
+
     .fc .fc-toolbar-title {
         font-size: 1.5rem;
         font-weight: 500;
         color: var(--bs-heading-color);
     }
-    
+
     .fc .fc-button {
         padding: 0.5rem 1rem;
         font-weight: 500;
@@ -30,33 +30,18 @@
         border: none;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    
+
     .fc .fc-button:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         background-color: var(--bs-primary-hover, var(--bs-primary));
     }
-    
+
     .fc .fc-button-active {
         background-color: var(--bs-primary-darker, var(--bs-primary)) !important;
         box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15) !important;
     }
-    
-    .fc .fc-event {
-        border-radius: 6px;
-        margin: 1px 0;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: none;
-        min-height: 24px;
-        padding: 2px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        max-width: 100%;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    
+
     .fc .fc-event-main {
         display: flex;
         align-items: center;
@@ -64,14 +49,14 @@
         padding: 0 4px;
         overflow: hidden;
     }
-    
+
     .fc .fc-event-time {
         font-size: 0.75rem;
         font-weight: 600;
         flex-shrink: 0;
         margin-right: 4px;
     }
-    
+
     .fc .fc-event-title {
         font-size: 0.875rem;
         font-weight: 500;
@@ -81,53 +66,62 @@
         width: 100%;
         display: block;
     }
-    
+
     .fc .fc-event:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         filter: brightness(1.1);
     }
-    
+
+    /* Çizgili arka plan için stil */
+    .striped-background {
+        background-image: repeating-linear-gradient(45deg,
+                transparent,
+                transparent 10px,
+                rgba(255, 193, 7, 0.1) 10px,
+                rgba(255, 193, 7, 0.1) 20px);
+    }
+
     .fc .fc-daygrid-event-harness {
         width: 100%;
     }
-    
+
     .fc .fc-daygrid-day-events {
         min-width: 0;
     }
-    
+
     .fc .fc-daygrid-body-balanced .fc-daygrid-day-events {
         position: relative;
         min-height: 2.5em;
     }
-    
+
     .fc td.fc-daygrid-day {
         max-width: 100%;
     }
-    
+
     .fc .fc-daygrid-day.fc-day-today {
         background-color: rgba(var(--bs-primary-rgb), 0.05) !important;
     }
-    
+
     .fc th {
         padding: 0.75rem 0;
         font-weight: 600;
         color: var(--bs-heading-color);
     }
-    
+
     .fc td {
         border-color: var(--bs-border-color);
     }
-    
+
     .fc .fc-daygrid-day-number {
         padding: 8px;
         color: var(--bs-body-color);
     }
-    
+
     .fc .fc-day-other .fc-daygrid-day-number {
         opacity: 0.5;
     }
-    
+
     /* Tooltip özelleştirmeleri */
     .event-tooltip .tooltip-inner {
         background-color: var(--bs-body-bg);
@@ -138,27 +132,27 @@
         max-width: 300px;
         border-radius: 8px;
     }
-    
+
     /* Dark tema için özel stiller */
     [data-bs-theme="dark"] .fc {
         background-color: var(--bs-dark);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
     }
-    
+
     [data-bs-theme="dark"] .fc-theme-standard td,
     [data-bs-theme="dark"] .fc-theme-standard th {
         border-color: var(--bs-border-color);
     }
-    
+
     [data-bs-theme="dark"] .fc-day-today {
         background-color: rgba(255, 255, 255, 0.05) !important;
     }
-    
+
     [data-bs-theme="dark"] .event-tooltip .tooltip-inner {
         background-color: var(--bs-dark);
         border-color: var(--bs-border-color);
     }
-    
+
     /* Modal özelleştirmeleri */
     .modal-content {
         background-color: #2D2D2D;
@@ -166,21 +160,21 @@
         border-radius: 12px;
         color: #fff;
     }
-    
+
     .modal-header {
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         padding: 1.25rem;
     }
-    
+
     .modal-body {
         padding: 1.25rem;
     }
-    
+
     .modal-footer {
         border-top: 1px solid rgba(255, 255, 255, 0.1);
         padding: 1.25rem;
     }
-    
+
     .step-number {
         width: 32px;
         height: 32px;
@@ -193,14 +187,14 @@
         font-size: 1rem;
         color: #fff;
     }
-    
+
     .modal-title {
         color: #fff;
         font-size: 1.25rem;
         font-weight: 500;
         margin: 0;
     }
-    
+
     /* Badge Styles */
     #stepType.badge {
         font-size: 0.75rem;
@@ -209,20 +203,20 @@
         border-radius: 4px;
         background-color: #34C759;
     }
-    
+
     /* Step Details Styles */
     .step-details {
         display: flex;
         flex-direction: column;
         gap: 1.25rem;
     }
-    
+
     .detail-item {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
     }
-    
+
     .detail-label {
         color: rgba(255, 255, 255, 0.6);
         font-size: 0.875rem;
@@ -230,12 +224,12 @@
         align-items: center;
         gap: 0.5rem;
     }
-    
+
     .detail-label i {
         font-size: 1rem;
         color: #007AFF;
     }
-    
+
     .detail-field {
         background-color: #3D3D3D;
         padding: 0.75rem;
@@ -243,7 +237,7 @@
         color: #fff;
         font-size: 0.9375rem;
     }
-    
+
     /* Form Controls */
     .form-control {
         background-color: #3D3D3D;
@@ -252,22 +246,22 @@
         padding: 0.75rem;
         font-size: 0.9375rem;
     }
-    
+
     .form-control:focus {
         background-color: #3D3D3D;
         color: #fff;
         box-shadow: none;
         border: none;
     }
-    
+
     .form-control::placeholder {
         color: rgba(255, 255, 255, 0.4);
     }
-    
+
     .form-control:read-only {
         background-color: #3D3D3D;
     }
-    
+
     /* Button Styles */
     .btn {
         padding: 0.5rem 1rem;
@@ -275,25 +269,25 @@
         border-radius: 6px;
         font-weight: 500;
     }
-    
+
     .btn-primary {
         background-color: #007AFF;
         border: none;
     }
-    
+
     .btn-primary:hover {
         background-color: #0066CC;
     }
-    
+
     .btn-secondary {
         background-color: #3D3D3D;
         border: none;
     }
-    
+
     .btn-secondary:hover {
         background-color: #4D4D4D;
     }
-    
+
     .btn-icon {
         width: 36px;
         height: 36px;
@@ -305,12 +299,12 @@
         border: none;
         color: #fff;
     }
-    
+
     .btn-icon:hover {
         background-color: #4D4D4D;
         color: #fff;
     }
-    
+
     /* Close Button */
     .btn-close {
         background-color: #3D3D3D;
@@ -318,32 +312,112 @@
         padding: 0.5rem;
         border-radius: 6px;
     }
-    
+
     .btn-close:hover {
         background-color: #4D4D4D;
         opacity: 1;
     }
-    
+
     .btn-close:focus {
         box-shadow: none;
     }
-    
+
     /* Text Colors */
     .text-muted {
         color: rgba(255, 255, 255, 0.5) !important;
+    }
+
+    .filter-section {
+        margin-left: auto;
+    }
+
+    .filter-section select {
+        min-width: 180px;
+        background-color: #343a40;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e9ecef;
+        padding: 0.5rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+    }
+
+    .filter-section select:focus {
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: none;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 500;
+    }
+
+    /* Tema bazlı metin renkleri */
+    .fc .fc-event {
+        color: var(--bs-body-color);
+    }
+
+    /* Light tema için özel stiller */
+    [data-bs-theme="light"] .fc .fc-event {
+        color: var(--bs-body-color);
+    }
+
+    [data-bs-theme="light"] .completed-event {
+        color: var(--bs-body-color) !important;
+    }
+
+    [data-bs-theme="light"] .deadline-event {
+        color: var(--bs-body-color) !important;
+    }
+
+    /* Dark tema için özel stiller */
+    [data-bs-theme="dark"] .fc .fc-event {
+        color: var(--bs-body-color);
+    }
+
+    [data-bs-theme="dark"] .completed-event {
+        color: var(--bs-light) !important;
+    }
+
+    [data-bs-theme="dark"] .deadline-event {
+        color: var(--bs-light) !important;
+    }
+
+    /* Gecikmiş adımlar için özel stil */
+    .overdue-event {
+        border-width: 2px !important;
+    }
+
+    [data-bs-theme="light"] .overdue-event {
+        color: var(--bs-danger) !important;
+    }
+
+    [data-bs-theme="dark"] .overdue-event {
+        color: var(--bs-danger-text) !important;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col">
-            <h1 class="h3 mb-2">Süreç Takvimi</h1>
-            <p class="text-muted">Tamamlanan adımların tarih bazlı görünümü</p>
+    <div class="row">
+        <div class="col d-flex justify-content-between align-items-center mb-4">
+            <h1 class="page-title m-0">Süreç Takvimi</h1>
+            <div class="filter-section">
+                <select id="responsibleFilter" class="form-select form-select-sm">
+                    <option value="">Tüm Sorumlular</option>
+                </select>
+            </div>
         </div>
     </div>
-    
+
     <div class="row">
         <div class="col">
             <div id="calendar"></div>
@@ -436,147 +510,113 @@
 <!-- Load FullCalendar -->
 <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
 <script>
-// Wait for both DOM and FullCalendar to be loaded
-window.addEventListener('load', function() {
-    if (typeof FullCalendar === 'undefined') {
-        console.error('FullCalendar failed to load');
-        return;
-    }
-
-    const calendarEl = document.getElementById('calendar');
-    if (!calendarEl) {
-        console.error('Calendar element not found');
-        return;
-    }
-
-    const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
-    const dayDetailModal = new bootstrap.Modal(document.getElementById('dayDetailModal'));
-    let currentProcessId = null;
-    
-    // Renk havuzu ve kullanılan renkleri takip etme
-    const colorPool = [
-        '#2C3E50', // Koyu Mavi-Gri
-        '#E74C3C', // Koyu Kırmızı
-        '#2980B9', // Koyu Mavi
-        '#8E44AD', // Koyu Mor
-        '#16A085', // Koyu Turkuaz
-        '#27AE60', // Koyu Yeşil
-        '#D35400', // Koyu Turuncu
-        '#1B4F72', // Lacivert
-        '#7D3C98', // Mor
-        '#A04000', // Kahverengi
-        '#145A32', // Koyu Yeşil
-        '#922B21', // Bordo
-        '#1A5276', // Gece Mavisi
-        '#6C3483', // Koyu Eflatun
-        '#186A3B', // Orman Yeşili
-        '#7E5109', // Amber
-        '#4A235A', // Patlıcan Moru
-        '#154360', // Okyanus Mavisi
-        '#641E16', // Kiremit
-        '#0E6251'  // Zümrüt
-    ];
-    let availableColors = [...colorPool];
-    
-    // Renk seçme fonksiyonu
-    function getNextColor() {
-        // Eğer kullanılabilir renk kalmadıysa havuzu yeniden doldur
-        if (availableColors.length === 0) {
-            availableColors = [...colorPool];
+    // Wait for both DOM and FullCalendar to be loaded
+    window.addEventListener('load', function () {
+        if (typeof FullCalendar === 'undefined') {
+            console.error('FullCalendar failed to load');
+            return;
         }
-        
-        // Rastgele bir renk seç ve kullanılabilir renklerden çıkar
-        const randomIndex = Math.floor(Math.random() * availableColors.length);
-        const selectedColor = availableColors[randomIndex];
-        availableColors.splice(randomIndex, 1);
-        
-        return selectedColor;
-    }
-    
-    // Adım tipini Türkçe olarak gösterme
-    function getStepTypeText(stepType) {
-        const typeTexts = {
-            'python_script': 'Python Betiği',
-            'sql_script': 'SQL Betiği',
-            'sql_procedure': 'SQL Prosedürü',
-            'mail': 'Mail İşlemi',
-            'default': 'Diğer'
-        };
-        return typeTexts[stepType] || typeTexts.default;
-    }
-    
-    const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        locale: 'tr',
-        height: 'auto',
-        headerToolbar: {
-            left: 'prev',
-            center: 'title',
-            right: 'next'
-        },
-        buttonText: {
-            today: 'Bugün',
-            month: 'Ay',
-            week: 'Hafta',
-            day: 'Gün'
-        },
-        firstDay: 1,
-        displayEventTime: false,
-        events: function(info, successCallback, failureCallback) {
-            // Her yeni event yüklemesinde renk havuzunu sıfırla
-            availableColors = [...colorPool];
-            
-            fetch('/api/calendar/completed-steps')
-                .then(response => response.json())
-                .then(events => {
-                    // Her event için sırayla renk ata
-                    events.forEach(event => {
-                        const color = getNextColor();
-                        event.backgroundColor = color;
-                        event.borderColor = color;
+
+        const calendarEl = document.getElementById('calendar');
+        if (!calendarEl) {
+            console.error('Calendar element not found');
+            return;
+        }
+
+        const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
+        const dayDetailModal = new bootstrap.Modal(document.getElementById('dayDetailModal'));
+        let currentProcessId = null;
+
+        // Adım tipini Türkçe olarak gösterme
+        function getStepTypeText(stepType) {
+            const typeTexts = {
+                'python_script': 'Python Betiği',
+                'sql_script': 'SQL Betiği',
+                'sql_procedure': 'SQL Prosedürü',
+                'mail': 'Mail İşlemi',
+                'default': 'Diğer'
+            };
+            return typeTexts[stepType] || typeTexts.default;
+        }
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            locale: 'tr',
+            height: 'auto',
+            headerToolbar: {
+                left: 'prev',
+                center: 'title',
+                right: 'next'
+            },
+            buttonText: {
+                today: 'Bugün',
+                month: 'Ay',
+                week: 'Hafta',
+                day: 'Gün'
+            },
+            firstDay: 1,
+            displayEventTime: false,
+            events: function (info, successCallback, failureCallback) {
+                // Her yeni event yüklemesinde renk havuzunu sıfırla
+
+
+                // Seçili sorumlu kişiyi al
+                const responsible = document.getElementById('responsibleFilter').value;
+
+                // API URL'ini oluştur
+                let url = '/api/calendar/completed-steps';
+                if (responsible) {
+                    url += `?responsible=${encodeURIComponent(responsible)}`;
+                }
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(events => {
+                        // Her event için sırayla renk ata
+                        events.forEach(event => {
+                        });
+                        successCallback(events);
+                    })
+                    .catch(error => {
+                        console.error('Events loading failed:', error);
+                        failureCallback(error);
                     });
-                    successCallback(events);
-                })
-                .catch(error => {
-                    console.error('Events loading failed:', error);
-                    failureCallback(error);
-                });
-        },
-        eventTimeFormat: {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        },
-        eventDisplay: 'block',
-        nextDayThreshold: '24:00:00',
-        dayMaxEvents: true,
-        eventContent: function(arg) {
-            return {
-                html: `
+            },
+            eventTimeFormat: {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            },
+            eventDisplay: 'block',
+            nextDayThreshold: '24:00:00',
+            dayMaxEvents: true,
+            eventContent: function (arg) {
+                return {
+                    html: `
                     <div class="fc-event-main">
                         <span class="fc-event-title">${arg.event.title}</span>
                     </div>
                 `
-            };
-        },
-        eventClick: function(info) {
-            currentProcessId = info.event.extendedProps.processId;
-            
-            // Adım numarasını ayarla
-            document.getElementById('stepNumber').textContent = info.event.title.split(' - ')[0];
-            document.getElementById('processName').textContent = info.event.title.split(' - ')[1];
-            document.getElementById('stepName').textContent = info.event.title.split(' - ')[1];
-            document.getElementById('stepDescription').textContent = 
-                info.event.extendedProps.description || 'Açıklama bulunmuyor.';
-            document.getElementById('responsible').textContent = 
-                info.event.extendedProps.responsible || 'Atanmamış';
-            document.getElementById('completionDate').textContent = 
-                info.event.extendedProps.completionDate || '-';
-            
-            eventModal.show();
-        },
-        eventDidMount: function(info) {
-            const tooltipContent = `
+                };
+            },
+            eventClick: function (info) {
+                currentProcessId = info.event.extendedProps.processId;
+
+                // Adım numarasını ayarla
+                document.getElementById('stepNumber').textContent = info.event.title.split(' - ')[0];
+                document.getElementById('processName').textContent = info.event.title.split(' - ')[1];
+                document.getElementById('stepName').textContent = info.event.title.split(' - ')[1];
+                document.getElementById('stepDescription').textContent =
+                    info.event.extendedProps.description || 'Açıklama bulunmuyor.';
+                document.getElementById('responsible').textContent =
+                    info.event.extendedProps.responsible || 'Atanmamış';
+                document.getElementById('completionDate').textContent =
+                    info.event.extendedProps.completionDate || '-';
+
+                eventModal.show();
+            },
+            eventDidMount: function (info) {
+                const tooltipContent = `
                 <div class="p-2">
                     <div><strong>Süreç:</strong> ${info.event.extendedProps.processName}</div>
                     <div><strong>Ana Adım:</strong> ${info.event.title.split(' - ')[1]}</div>
@@ -584,63 +624,63 @@ window.addEventListener('load', function() {
                     <div><strong>Tarih:</strong> ${info.event.extendedProps.completionDate}</div>
                 </div>
             `;
-            
-            new bootstrap.Tooltip(info.el, {
-                title: tooltipContent,
-                html: true,
-                placement: 'top',
-                customClass: 'event-tooltip'
-            });
-        },
-        loading: function(isLoading) {
-            if (isLoading) {
-                const loadingDiv = document.createElement('div');
-                loadingDiv.id = 'calendar-loading';
-                loadingDiv.className = 'text-center my-3';
-                loadingDiv.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Yükleniyor...</span></div>';
-                calendarEl.parentNode.insertBefore(loadingDiv, calendarEl);
-            } else {
-                const loadingDiv = document.getElementById('calendar-loading');
-                if (loadingDiv) loadingDiv.remove();
-            }
-        },
-        views: {
-            timeGrid: {
-                dayMaxEvents: 4
-            }
-        },
-        dateClick: function(info) {
-            const clickedDate = info.date;
-            const formattedDate = clickedDate.toLocaleDateString('tr-TR', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-            
-            document.getElementById('dayDetailTitle').textContent = formattedDate;
-            
-            // O güne ait tüm olayları al
-            const dayEvents = calendar.getEvents().filter(event => {
-                const eventDate = new Date(event.start);
-                return eventDate.toDateString() === clickedDate.toDateString();
-            });
-            
-            const dayEventsContainer = document.getElementById('dayEvents');
-            dayEventsContainer.innerHTML = '';
-            
-            if (dayEvents.length === 0) {
-                dayEventsContainer.innerHTML = `
+
+                new bootstrap.Tooltip(info.el, {
+                    title: tooltipContent,
+                    html: true,
+                    placement: 'top',
+                    customClass: 'event-tooltip'
+                });
+            },
+            loading: function (isLoading) {
+                if (isLoading) {
+                    const loadingDiv = document.createElement('div');
+                    loadingDiv.id = 'calendar-loading';
+                    loadingDiv.className = 'text-center my-3';
+                    loadingDiv.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Yükleniyor...</span></div>';
+                    calendarEl.parentNode.insertBefore(loadingDiv, calendarEl);
+                } else {
+                    const loadingDiv = document.getElementById('calendar-loading');
+                    if (loadingDiv) loadingDiv.remove();
+                }
+            },
+            views: {
+                timeGrid: {
+                    dayMaxEvents: 4
+                }
+            },
+            dateClick: function (info) {
+                const clickedDate = info.date;
+                const formattedDate = clickedDate.toLocaleDateString('tr-TR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+
+                document.getElementById('dayDetailTitle').textContent = formattedDate;
+
+                // O güne ait tüm olayları al
+                const dayEvents = calendar.getEvents().filter(event => {
+                    const eventDate = new Date(event.start);
+                    return eventDate.toDateString() === clickedDate.toDateString();
+                });
+
+                const dayEventsContainer = document.getElementById('dayEvents');
+                dayEventsContainer.innerHTML = '';
+
+                if (dayEvents.length === 0) {
+                    dayEventsContainer.innerHTML = `
                     <div class="text-center text-muted py-4">
                         <i class="bi bi-calendar-x fs-1"></i>
                         <p class="mt-2">Bu güne ait tamamlanan adım bulunmuyor.</p>
                     </div>
                 `;
-            } else {
-                dayEvents.forEach(event => {
-                    const eventElement = document.createElement('div');
-                    eventElement.className = 'list-group-item list-group-item-action';
-                    eventElement.style.borderLeft = `4px solid ${event.backgroundColor}`;
-                    eventElement.innerHTML = `
+                } else {
+                    dayEvents.forEach(event => {
+                        const eventElement = document.createElement('div');
+                        eventElement.className = 'list-group-item list-group-item-action';
+                        eventElement.style.borderLeft = `4px solid ${event.backgroundColor}`;
+                        eventElement.innerHTML = `
                         <div class="d-flex w-100 justify-content-between align-items-center">
                             <h6 class="mb-1">${event.title}</h6>
                             <small class="text-muted">${event.extendedProps.completionTime}</small>
@@ -650,40 +690,58 @@ window.addEventListener('load', function() {
                             <i class="bi bi-person"></i> ${event.extendedProps.responsible || 'Atanmamış'}
                         </small>
                     `;
-                    eventElement.addEventListener('click', () => {
-                        dayDetailModal.hide();
-                        currentProcessId = event.extendedProps.processId;
-                        document.getElementById('stepNumber').textContent = event.title.split(' - ')[0];
-                        document.getElementById('processName').textContent = event.title.split(' - ')[1];
-                        document.getElementById('stepName').textContent = event.title.split(' - ')[1];
-                        document.getElementById('stepDescription').textContent = 
-                            event.extendedProps.description || 'Açıklama bulunmuyor.';
-                        document.getElementById('responsible').textContent = 
-                            event.extendedProps.responsible || 'Atanmamış';
-                        document.getElementById('completionDate').textContent = 
-                            event.extendedProps.completionDate;
-                        eventModal.show();
+                        eventElement.addEventListener('click', () => {
+                            dayDetailModal.hide();
+                            currentProcessId = event.extendedProps.processId;
+                            document.getElementById('stepNumber').textContent = event.title.split(' - ')[0];
+                            document.getElementById('processName').textContent = event.title.split(' - ')[1];
+                            document.getElementById('stepName').textContent = event.title.split(' - ')[1];
+                            document.getElementById('stepDescription').textContent =
+                                event.extendedProps.description || 'Açıklama bulunmuyor.';
+                            document.getElementById('responsible').textContent =
+                                event.extendedProps.responsible || 'Atanmamış';
+                            document.getElementById('completionDate').textContent =
+                                event.extendedProps.completionDate;
+                            eventModal.show();
+                        });
+                        dayEventsContainer.appendChild(eventElement);
                     });
-                    dayEventsContainer.appendChild(eventElement);
-                });
+                }
+
+                dayDetailModal.show();
             }
-            
-            dayDetailModal.show();
+        });
+
+        try {
+            calendar.render();
+            console.log('Calendar successfully rendered');
+        } catch (error) {
+            console.error('Error rendering calendar:', error);
         }
+
+        document.getElementById('goToProcess').addEventListener('click', function () {
+            if (currentProcessId) {
+                window.location.href = `/process/${currentProcessId}`;
+            }
+        });
+
+        // Sorumlu kişileri yükle
+        fetch('/api/calendar/responsibles')
+            .then(response => response.json())
+            .then(responsibles => {
+                const select = document.getElementById('responsibleFilter');
+                responsibles.forEach(responsible => {
+                    const option = document.createElement('option');
+                    option.value = responsible;
+                    option.textContent = responsible;
+                    select.appendChild(option);
+                });
+            });
+
+        // Filtre değiştiğinde takvimi güncelle
+        document.getElementById('responsibleFilter').addEventListener('change', function () {
+            calendar.refetchEvents();
+        });
     });
-    
-    try {
-        calendar.render();
-        console.log('Calendar successfully rendered');
-    } catch (error) {
-        console.error('Error rendering calendar:', error);
-    }
-    
-    document.getElementById('goToProcess').addEventListener('click', function() {
-        if (currentProcessId) {
-            window.location.href = `/process/${currentProcessId}`;
-        }
-    });
-});
 </script>
-{% endblock %} 
+{% endblock %}
