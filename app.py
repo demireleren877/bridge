@@ -267,7 +267,7 @@ def index():
 def category_years(category_id):
     category = ProcessCategory.query.get_or_404(category_id)
     processes = Process.query.filter_by(category_id=category_id).all()
-    years = sorted(set(process.year for process in processes), reverse=True)
+    years = sorted(set(process.year for process in processes))
     processes_by_year = {}
     for year in years:
         processes_by_year[year] = len([p for p in processes if p.year == year])
@@ -293,7 +293,7 @@ def category_processes(category_id, year):
 @app.route('/uncategorized')
 def uncategorized_years():
     processes = Process.query.filter_by(category_id=None).all()
-    years = sorted(set(process.year for process in processes), reverse=True)
+    years = sorted(set(process.year for process in processes))
     processes_by_year = {}
     for year in years:
         processes_by_year[year] = len([p for p in processes if p.year == year])
@@ -1151,8 +1151,9 @@ def get_process_flowchart(process_id):
 
 @app.route('/api/calendar/completed-steps')
 def get_completed_steps():
-    # URL'den sorumlu kişi parametresini al
+    # URL'den sorumlu kişi ve kategori parametrelerini al
     responsible = request.args.get('responsible', None)
+    category_id = request.args.get('category_id', None)
     
     # Base query - hem tamamlanmış hem de deadline'ı olan adımları al
     query = Step.query.filter(
@@ -1161,11 +1162,15 @@ def get_completed_steps():
             Step.completed_at.isnot(None),  # Tamamlanmış adımlar
             Step.deadline.isnot(None)  # Deadline'ı olan adımlar
         )
-    )
+    ).join(Process, Step.process_id == Process.id)  # Process tablosuyla join
     
     # Eğer sorumlu kişi filtresi varsa, query'e ekle
     if responsible:
         query = query.filter(Step.responsible == responsible)
+        
+    # Eğer kategori filtresi varsa, query'e ekle
+    if category_id:
+        query = query.filter(Process.category_id == category_id)
     
     steps = query.all()
     
@@ -1195,7 +1200,9 @@ def get_completed_steps():
                     'responsible': step.responsible or '',
                     'completionTime': completion_time.strftime('%H:%M'),
                     'completionDate': completion_time.strftime('%d.%m.%Y %H:%M'),
-                    'status': 'completed'
+                    'status': 'completed',
+                    'categoryId': step.process.category_id,
+                    'categoryName': step.process.category.name if step.process.category else 'Kategorisiz'
                 }
             }
             events.append(event)
@@ -1221,7 +1228,9 @@ def get_completed_steps():
                     'description': step.description or '',
                     'responsible': step.responsible or '',
                     'deadline': step.deadline.strftime('%d.%m.%Y %H:%M'),
-                    'status': 'overdue' if is_overdue else 'pending'
+                    'status': 'overdue' if is_overdue else 'pending',
+                    'categoryId': step.process.category_id,
+                    'categoryName': step.process.category.name if step.process.category else 'Kategorisiz'
                 }
             }
             events.append(event)
@@ -1381,6 +1390,19 @@ def update_process_category(process_id):
         return redirect(url_for('category_processes', category_id=process.category_id, year=process.year))
     else:
         return redirect(url_for('uncategorized_processes', year=process.year))
+
+@app.route('/api/calendar/categories')
+def get_calendar_categories():
+    # Tüm kategorileri al
+    categories = ProcessCategory.query.order_by(ProcessCategory.name).all()
+    
+    # Liste formatına çevir
+    category_list = [{'id': cat.id, 'name': cat.name} for cat in categories]
+    
+    # Kategorisiz seçeneğini ekle
+    category_list.insert(0, {'id': '', 'name': 'Kategorisiz'})
+    
+    return jsonify(category_list)
 
 if __name__ == '__main__':
     with app.app_context():

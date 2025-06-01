@@ -449,6 +449,46 @@
 {{ super() }}
 <script src="{{ url_for('static', filename='js/mail.js') }}"></script>
 <style>
+    [data-bs-theme="light"] .card-body {
+        background-color: var(--bs-gray-100);
+        color: var(--bs-dark);
+    }
+
+    [data-bs-theme="dark"] .card-body {
+        background-color: var(--bs-dark);
+        color: var(--bs-light);
+    }
+
+    [data-bs-theme="light"] .form-select {
+        background-color: var(--bs-gray-100);
+        color: var(--bs-dark);
+    }
+
+    [data-bs-theme="dark"] .form-select {
+        background-color: var(--bs-dark);
+        color: var(--bs-light);
+    }
+
+    [data-bs-theme="light"] .form-select:focus {
+        background-color: var(--bs-gray-100);
+        color: var(--bs-dark);
+    }
+
+    [data-bs-theme="dark"] .form-select:focus {
+        background-color: var(--bs-dark);
+        color: var(--bs-light);
+    }
+
+    [data-bs-theme="light"] .form-control {
+        background-color: var(--bs-gray-100);
+        color: var(--bs-dark);
+    }
+
+    [data-bs-theme="dark"] .form-control {
+        background-color: var(--bs-dark);
+        color: var(--bs-light);
+    }
+
     .step-indent {
         display: inline-block;
     }

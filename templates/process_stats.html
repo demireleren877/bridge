@@ -80,13 +80,13 @@
                 </div>
                 <div class="modal-body">
                     {% if responsibles and responsibles|length > 0 %}
-                        <ul class="list-group">
+                    <ul class="list-group">
                         {% for r in responsibles %}
-                            <li class="list-group-item">{{ r }}</li>
+                        <li class="list-group-item">{{ r }}</li>
                         {% endfor %}
-                        </ul>
+                    </ul>
                     {% else %}
-                        <div class="text-muted">Sorumlu yok.</div>
+                    <div class="text-muted">Sorumlu yok.</div>
                     {% endif %}
                 </div>
             </div>
@@ -131,52 +131,88 @@
 {% block styles %}
 {{ super() }}
 <style>
-.stats-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-}
+    .stats-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+    }
 
-.compact-card-body {
-    padding: 0.3rem 0.5rem 0.3rem 0.5rem !important;
-    min-height: 38px;
-    height: auto;
-    display: flex;
-    align-items: center;
-}
-.card-title.mb-0, .card-title {
-    font-size: 1.05rem;
-    margin-bottom: 0 !important;
-    line-height: 1.05;
-}
-.card-subtitle {
-    font-size: 0.82rem;
-    margin-bottom: 0.05rem;
-}
-.d-flex.align-items-center.mb-2 {
-    margin-bottom: 0.05rem !important;
-    min-height: 32px;
-}
-.card {
-    margin-bottom: 0 !important;
-}
-.card:hover, .card.clickable:focus {
-    transform: translateY(-2px);
-    box-shadow: 0 0 0 0.15rem var(--bs-warning);
-}
-.clickable {
-    cursor: pointer;
-}
-[data-bs-theme="dark"] .card {
-    background-color: var(--bs-dark);
-}
-[data-bs-theme="dark"] .stats-icon {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-}
+    .compact-card-body {
+        padding: 0.3rem 0.5rem 0.3rem 0.5rem !important;
+        min-height: 38px;
+        height: auto;
+        display: flex;
+        align-items: center;
+    }
+
+    .card-title.mb-0,
+    .card-title {
+        font-size: 1.05rem;
+        margin-bottom: 0 !important;
+        line-height: 1.05;
+    }
+
+    .card-subtitle {
+        font-size: 0.82rem;
+        margin-bottom: 0.05rem;
+    }
+
+    .d-flex.align-items-center.mb-2 {
+        margin-bottom: 0.05rem !important;
+        min-height: 32px;
+    }
+
+
+    .card:hover,
+    .card.clickable:focus {
+        transform: translateY(-2px);
+        box-shadow: 0 0 0 0.15rem var(--bs-warning);
+    }
+
+    .clickable {
+        cursor: pointer;
+    }
+
+
+    [data-bs-theme="dark"] .stats-icon {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    [data-bs-theme="dark"] .compact-card-body {
+        background-color: var(--bs-dark);
+        color: var(--bs-light);
+    }
+
+    [data-bs-theme="light"] .compact-card-body {
+        background-color: var(--bs-gray-100);
+        color: var(--bs-dark);
+    }
+
+    [data-bs-theme="light"] .card-body {
+        background-color: var(--bs-gray-100);
+        color: var(--bs-dark);
+    }
+
+    [data-bs-theme="dark"] .card-body {
+        background-color: var(--bs-gray-800);
+        color: var(--bs-light);
+    }
+
+    [data-bs-theme="dark"] .card {
+        background-color: var(--bs-gray-800);
+        border: 1px solid var(--bs-border-color);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    [data-bs-theme="light"] .card {
+        background-color: var(--bs-gray-100);
+        border: 1px solid var(--bs-border-color);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
 </style>
 {% endblock %}
 
@@ -193,126 +229,126 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // JSON'dan verileri al
-    const chartData = JSON.parse(document.getElementById('chart-data').textContent);
-    const completionData = chartData.completionData;
-    const stepTypes = chartData.stepTypes;
-    const stepTypeCounts = chartData.stepTypeCounts;
-    const timelineDates = chartData.timelineDates;
-    const timelineCounts = chartData.timelineCounts;
+    document.addEventListener('DOMContentLoaded', function () {
+        // JSON'dan verileri al
+        const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+        const completionData = chartData.completionData;
+        const stepTypes = chartData.stepTypes;
+        const stepTypeCounts = chartData.stepTypeCounts;
+        const timelineDates = chartData.timelineDates;
+        const timelineCounts = chartData.timelineCounts;
 
-    // Aktif sorumlular kartı tıklanınca modalı aç
-    var responsiblesCard = document.getElementById('responsiblesCard');
-    if (responsiblesCard) {
-        responsiblesCard.addEventListener('click', function() {
-            var modal = new bootstrap.Modal(document.getElementById('responsiblesModal'));
-            modal.show();
-        });
-        responsiblesCard.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
+        // Aktif sorumlular kartı tıklanınca modalı aç
+        var responsiblesCard = document.getElementById('responsiblesCard');
+        if (responsiblesCard) {
+            responsiblesCard.addEventListener('click', function () {
                 var modal = new bootstrap.Modal(document.getElementById('responsiblesModal'));
                 modal.show();
+            });
+            responsiblesCard.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    var modal = new bootstrap.Modal(document.getElementById('responsiblesModal'));
+                    modal.show();
+                }
+            });
+        }
+
+        // Chart.js global defaults
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.plugins.legend.position = 'bottom';
+        Chart.defaults.plugins.legend.labels.usePointStyle = true;
+        Chart.defaults.plugins.legend.labels.padding = 20;
+        Chart.defaults.plugins.tooltip.padding = 12;
+        Chart.defaults.plugins.tooltip.cornerRadius = 8;
+        Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+
+        // Completion Status Chart
+        new Chart(document.getElementById('completionChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Tamamlandı', 'Devam Ediyor', 'Beklemede', 'Başlamadı'],
+                datasets: [{
+                    data: completionData,
+                    backgroundColor: [
+                        'rgba(40, 167, 69, 0.8)',
+                        'rgba(0, 123, 255, 0.8)',
+                        'rgba(255, 193, 7, 0.8)',
+                        'rgba(108, 117, 125, 0.8)'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                cutout: '70%',
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
             }
         });
-    }
 
-    // Chart.js global defaults
-    Chart.defaults.font.family = "'Inter', sans-serif";
-    Chart.defaults.plugins.legend.position = 'bottom';
-    Chart.defaults.plugins.legend.labels.usePointStyle = true;
-    Chart.defaults.plugins.legend.labels.padding = 20;
-    Chart.defaults.plugins.tooltip.padding = 12;
-    Chart.defaults.plugins.tooltip.cornerRadius = 8;
-    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-
-    // Completion Status Chart
-    new Chart(document.getElementById('completionChart'), {
-        type: 'doughnut',
-        data: {
-            labels: ['Tamamlandı', 'Devam Ediyor', 'Beklemede', 'Başlamadı'],
-            datasets: [{
-                data: completionData,
-                backgroundColor: [
-                    'rgba(40, 167, 69, 0.8)',
-                    'rgba(0, 123, 255, 0.8)',
-                    'rgba(255, 193, 7, 0.8)',
-                    'rgba(108, 117, 125, 0.8)'
-                ],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            cutout: '70%',
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
-
-    // Step Types Chart
-    new Chart(document.getElementById('stepTypesChart'), {
-        type: 'bar',
-        data: {
-            labels: stepTypes,
-            datasets: [{
-                label: 'Adım Sayısı',
-                data: stepTypeCounts,
-                backgroundColor: 'rgba(0, 123, 255, 0.8)',
-                borderRadius: 8,
-                borderWidth: 0
-            }]
-        },
-        options: {
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        display: false
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
+        // Step Types Chart
+        new Chart(document.getElementById('stepTypesChart'), {
+            type: 'bar',
+            data: {
+                labels: stepTypes,
+                datasets: [{
+                    label: 'Adım Sayısı',
+                    data: stepTypeCounts,
+                    backgroundColor: 'rgba(0, 123, 255, 0.8)',
+                    borderRadius: 8,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            display: false
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
                     }
                 }
             }
-        }
-    });
+        });
 
-    // Timeline Chart (no zoom/pan)
-    new Chart(document.getElementById('timelineChart'), {
-        type: 'line',
-        data: {
-            labels: timelineDates,
-            datasets: [{
-                label: 'Tamamlanan Adımlar',
-                data: timelineCounts,
-                borderColor: 'rgba(0, 123, 255, 0.8)',
-                backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                fill: true,
-                tension: 0.4,
-                borderWidth: 2
-            }]
-        },
-        options: {
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        display: false
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
+        // Timeline Chart (no zoom/pan)
+        new Chart(document.getElementById('timelineChart'), {
+            type: 'line',
+            data: {
+                labels: timelineDates,
+                datasets: [{
+                    label: 'Tamamlanan Adımlar',
+                    data: timelineCounts,
+                    borderColor: 'rgba(0, 123, 255, 0.8)',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            display: false
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
                     }
                 }
             }
-        }
+        });
     });
-});
 </script>
-{% endblock %} 
+{% endblock %}

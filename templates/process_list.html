@@ -17,6 +17,15 @@ Kategorisiz Süreçler - {{ year }} - {{ super() }}
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
 
+    [data-bs-theme="light"] .process-card {
+        background-color: var(--bs-white);
+        color: var(--bs-dark);
+    }
+
+    [data-bs-theme="dark"] .process-card {
+        background-color: var(--bs-dark);
+    }
+
     .process-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
@@ -69,7 +78,100 @@ Kategorisiz Süreçler - {{ year }} - {{ super() }}
         font-weight: 700;
         font-size: 0.875rem;
         z-index: 1;
-        text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+    }
+
+    [data-bs-theme="light"] .progress-text {
+        color: var(--bs-dark) !important;
+    }
+
+    [data-bs-theme="dark"] .progress-text {
+        color: var(--bs-light) !important;
+    }
+
+    [data-bs-theme="light"] .dropdown-menu {
+        background-color: var(--bs-white) !important;
+    }
+
+    [data-bs-theme="dark"] .dropdown-menu {
+        background-color: var(--bs-dark) !important;
+    }
+
+    [data-bs-theme="light"] .dropdown-item:hover {
+        background-color: var(--bs-gray-100) !important;
+        color: var(--bs-gray-700) !important;
+    }
+
+    [data-bs-theme="dark"] .dropdown-item:hover {
+        background-color: var(--bs-gray-800) !important;
+        color: var(--bs-light) !important;
+    }
+
+
+
+    #flowchartModal .modal-dialog {
+        max-width: 90vw;
+        width: 90vw;
+        margin: 1.75rem auto;
+        height: 90vh;
+    }
+
+    #flowchartModal .modal-content {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #flowchartModal .modal-body {
+        flex: 1;
+        padding: 0;
+        position: relative;
+        overflow: hidden;
+    }
+
+    #flowchartNetwork {
+        width: 100%;
+        height: 100%;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        position: absolute;
+    }
+
+    .vis-network {
+        outline: none;
+    }
+
+    .vis-network .vis-label {
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .vis-network .vis-label .vis-inner {
+        padding: 8px;
+    }
+
+    .vis-network .vis-label.main {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+    .vis-network .vis-label.python_script {
+        background-color: #ffc107;
+        color: #000;
+    }
+
+    .vis-network .vis-label.sql_script {
+        background-color: #198754;
+        color: white;
+    }
+
+    .vis-network .vis-label.sql_procedure {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .vis-network .vis-label.mail {
+        background-color: #0dcaf0;
+        color: white;
     }
 </style>
 {% endblock %}
@@ -228,6 +330,33 @@ Kategorisiz Süreçler - {{ year }} - {{ super() }}
     </div>
 </div>
 
+<!-- Flowchart Modal -->
+<div class="modal fade" id="flowchartModal" tabindex="-1" aria-labelledby="flowchartModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="flowchartModalLabel">Süreç Akış Şeması</h5>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="toggleDirectionBtn">
+                    <i class="bi bi-arrow-down-up"></i> Yön Değiştir
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="exportPdfBtn">
+                    <i class="bi bi-file-earmark-pdf"></i> PDF'e Aktar
+                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="flowchartNetwork"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- vis.js kütüphanesini ekle -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" type="text/css" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 <script>
     // İsim düzenleme
     document.querySelectorAll('.process-name').forEach(nameSpan => {
@@ -322,6 +451,203 @@ Kategorisiz Süreçler - {{ year }} - {{ super() }}
             this.classList.add('d-none');
             span.classList.remove('d-none');
         });
+    });
+
+    let network = null;
+    let flowchartModal = null;
+    let isHorizontal = false; // Başlangıçta dikey görünüm için false yapıyoruz
+
+    document.addEventListener('DOMContentLoaded', function () {
+        flowchartModal = new bootstrap.Modal(document.getElementById('flowchartModal'));
+
+        // Flowchart modalı açıldığında çalışacak event listener
+        document.getElementById('flowchartModal').addEventListener('shown.bs.modal', function () {
+            if (network) {
+                setTimeout(() => {
+                    network.fit({
+                        animation: {
+                            duration: 1000,
+                            easingFunction: 'easeInOutQuad'
+                        }
+                    });
+                }, 100);
+            }
+        });
+
+        // Yön değiştirme butonuna tıklama
+        document.getElementById('toggleDirectionBtn').addEventListener('click', function () {
+            if (!network) return;
+            isHorizontal = !isHorizontal;
+
+            const options = {
+                edges: {
+                    smooth: {
+                        enabled: true,
+                        type: 'cubicBezier',
+                        forceDirection: isHorizontal ? 'horizontal' : 'vertical',
+                        roundness: 0.3
+                    }
+                },
+                layout: {
+                    hierarchical: {
+                        enabled: true,
+                        direction: isHorizontal ? 'LR' : 'UD',
+                        sortMethod: 'directed',
+                        levelSeparation: 250,
+                        nodeSpacing: 200,
+                        treeSpacing: 200,
+                        blockShifting: true,
+                        edgeMinimization: true,
+                        parentCentralization: true,
+                        shakeTowards: isHorizontal ? 'roots' : 'leaves'
+                    }
+                }
+            };
+
+            network.setOptions(options);
+
+            // Yeniden düzenleme ve merkezleme
+            setTimeout(() => {
+                network.stabilize();
+                network.fit({
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }, 100);
+        });
+
+        // PDF export butonuna tıklama
+        document.getElementById('exportPdfBtn').addEventListener('click', function () {
+            if (!network) return;
+            // vis.js canvas'ını PNG olarak al
+            const dataUrl = network.canvas.frame.canvas.toDataURL();
+            // jsPDF ile PDF oluştur
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait' });
+            // PDF boyutunu ayarla
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            // Görselin oranını koruyarak boyutlandır
+            const img = new Image();
+            img.onload = function () {
+                let imgWidth = img.width;
+                let imgHeight = img.height;
+                let ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+                let w = imgWidth * ratio;
+                let h = imgHeight * ratio;
+                let x = (pageWidth - w) / 2;
+                let y = (pageHeight - h) / 2;
+                pdf.addImage(dataUrl, 'PNG', x, y, w, h);
+                pdf.save('akış-şeması.pdf');
+            };
+            img.src = dataUrl;
+        });
+    });
+
+    // Akış şeması gösterme fonksiyonu
+    function showFlowchart(processId) {
+        fetch(`/api/process/${processId}/flowchart`)
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('flowchartNetwork');
+                const options = {
+                    nodes: {
+                        shape: 'box',
+                        margin: 10,
+                        font: {
+                            size: 14,
+                            multi: true
+                        },
+                        widthConstraint: {
+                            minimum: 150,
+                            maximum: 300
+                        },
+                        borderWidth: 2,
+                        borderWidthSelected: 3,
+                        shadow: true
+                    },
+                    edges: {
+                        arrows: 'to',
+                        smooth: {
+                            enabled: true,
+                            type: 'cubicBezier',
+                            forceDirection: isHorizontal ? 'horizontal' : 'vertical',
+                            roundness: 0.3
+                        },
+                        width: 2,
+                        shadow: true
+                    },
+                    layout: {
+                        hierarchical: {
+                            enabled: true,
+                            direction: isHorizontal ? 'LR' : 'UD',
+                            sortMethod: 'directed',
+                            levelSeparation: 250,
+                            nodeSpacing: 200,
+                            treeSpacing: 200,
+                            blockShifting: true,
+                            edgeMinimization: true,
+                            parentCentralization: true,
+                            shakeTowards: isHorizontal ? 'roots' : 'leaves'
+                        }
+                    },
+                    physics: {
+                        enabled: true,
+                        hierarchicalRepulsion: {
+                            nodeDistance: 250,
+                            springLength: 250
+                        },
+                        stabilization: {
+                            enabled: true,
+                            iterations: 1000,
+                            updateInterval: 100,
+                            fit: true // Stabilizasyon sırasında otomatik fit yapılmasını sağlar
+                        }
+                    },
+                    interaction: {
+                        dragNodes: true,
+                        dragView: true,
+                        zoomView: true,
+                        hover: true
+                    }
+                };
+
+                if (network) {
+                    network.destroy();
+                }
+
+                network = new vis.Network(container, data, options);
+
+                // Şemayı merkezle ve stabilize et
+                network.once('stabilizationIterationsDone', function () {
+                    setTimeout(() => {
+                        network.fit({
+                            animation: {
+                                duration: 1000,
+                                easingFunction: 'easeInOutQuad'
+                            }
+                        });
+                    }, 100);
+                });
+
+                flowchartModal.show();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Akış şeması yüklenirken bir hata oluştu.');
+            });
+    }
+    // Akış şeması butonuna tıklama olayı ekle
+    document.querySelectorAll('.dropdown-item').forEach(item => {
+        if (item.textContent.trim() === 'Akış Şeması') {
+            item.addEventListener('click', function (e) {
+                e.preventDefault();
+                const processId = this.closest('.card').querySelector('.process-name').dataset.processId;
+                showFlowchart(processId);
+            });
+        }
     });
 </script>
 {% endblock %}
