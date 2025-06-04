@@ -4,8 +4,8 @@
 
 {% block head %}
 {{ super() }}
-<link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.css' rel='stylesheet' />
-<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.js'></script>
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css' rel='stylesheet' />
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
 <style>
     .fc {
         max-width: 1200px;
@@ -655,7 +655,6 @@
 
 {% block scripts %}
 {{ super() }}
-<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
 <script>
     window.addEventListener('load', function () {
         if (typeof FullCalendar === 'undefined') {
@@ -750,7 +749,7 @@
             },
             eventDisplay: 'block',
             nextDayThreshold: '24:00:00',
-            dayMaxEvents: true,
+            dayMaxEvents: 3,
             eventContent: function (arg) {
                 return {
                     html: `
@@ -870,6 +869,9 @@
                 }
 
                 dayDetailModal.show();
+            },
+            moreLinkClick: function (info) {
+                return 'none';
             },
             // Toolbar'ı özelleştir
             customButtons: {

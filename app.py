@@ -1404,6 +1404,40 @@ def get_calendar_categories():
     
     return jsonify(category_list)
 
+@app.route('/api/responsible/<responsible>/steps')
+def get_responsible_steps(responsible):
+    # Sorumluya ait tüm adımları al
+    steps = Step.query.filter_by(responsible=responsible).all()
+    
+    # İstatistikleri hesapla
+    total_steps = len(steps)
+    completed_steps = sum(1 for step in steps if step.status == 'done')
+    completion_rate = int((completed_steps / total_steps * 100) if total_steps > 0 else 0)
+    
+    # Adım detaylarını hazırla
+    step_details = []
+    for step in steps:
+        process = Process.query.get(step.process_id)
+        step_details.append({
+            'id': step.id,
+            'process_id': step.process_id,  # Süreç ID'sini ekle
+            'name': step.name,
+            'status': step.status,
+            'process_name': process.name if process else 'Bilinmeyen Süreç',
+            'completed_at': step.completed_at.strftime('%d.%m.%Y %H:%M') if step.completed_at else None
+        })
+    
+    # Adımları duruma göre sırala: done > in_progress > waiting > not_started
+    status_order = {'done': 0, 'in_progress': 1, 'waiting': 2, 'not_started': 3}
+    step_details.sort(key=lambda x: (status_order[x['status']], x['name']))
+    
+    return jsonify({
+        'total_steps': total_steps,
+        'completed_steps': completed_steps,
+        'completion_rate': completion_rate,
+        'steps': step_details
+    })
+
 if __name__ == '__main__':
     with app.app_context():
         # Sadece tabloları oluştur, silme işlemini kaldır

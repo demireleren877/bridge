@@ -59,6 +59,121 @@
         border: 1px solid var(--bs-border-color);
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
+
+    .responsible-modal .modal-content {
+        border: none;
+        border-radius: 12px;
+    }
+
+    .responsible-modal .modal-header {
+        border-bottom: 1px solid var(--bs-border-color);
+        padding: 1.25rem;
+    }
+
+    .responsible-modal .modal-body {
+        padding: 1.25rem;
+    }
+
+    .responsible-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+
+    .stat-card {
+        background-color: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 500;
+        color: var(--bs-primary);
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        color: var(--bs-gray-600);
+        font-size: 0.875rem;
+    }
+
+    .step-list {
+        margin-top: 1.5rem;
+    }
+
+    .step-item {
+        padding: 1rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        margin-bottom: 0.75rem;
+        background-color: var(--bs-body-bg);
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .step-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .step-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .step-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .step-title {
+        font-weight: 500;
+        margin: 0;
+    }
+
+    .step-process {
+        font-size: 0.875rem;
+        color: var(--bs-gray-600);
+    }
+
+    .step-status {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+    }
+
+    .status-done {
+        background-color: var(--bs-success-bg-subtle);
+        color: var(--bs-success);
+    }
+
+    .status-in_progress {
+        background-color: var(--bs-warning-bg-subtle);
+        color: var(--bs-warning);
+    }
+
+    .status-waiting {
+        background-color: var(--bs-info-bg-subtle);
+        color: var(--bs-info);
+    }
+
+    .status-not_started {
+        background-color: var(--bs-gray-200);
+        color: var(--bs-gray-700);
+    }
+
+    [data-bs-theme="dark"] .stat-card {
+        background-color: var(--bs-dark);
+    }
+
+    [data-bs-theme="dark"] .step-item {
+        background-color: var(--bs-dark);
+    }
 </style>
 {% endblock %}
 
@@ -66,12 +181,53 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-end mb-4">
         <div>
+            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#responsibleModal">
+                <i class="bi bi-person-lines-fill"></i> Sorumlular
+            </button>
             <a href="{{ url_for('new_category') }}" class="btn btn-primary me-2">
                 <i class="bi bi-folder-plus"></i> Yeni Kategori
             </a>
             <a href="{{ url_for('new_process') }}" class="btn btn-success">
                 <i class="bi bi-plus-lg"></i> Yeni Süreç
             </a>
+        </div>
+    </div>
+
+    <!-- Sorumlu Modal -->
+    <div class="modal fade responsible-modal" id="responsibleModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sorumlu Kişi Detayları</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <select class="form-select" id="responsibleSelect">
+                        <option value="">Sorumlu Kişi Seçin</option>
+                    </select>
+
+                    <div id="responsibleDetails" style="display: none;">
+                        <div class="responsible-stats">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalSteps">0</div>
+                                <div class="stat-label">Toplam Adım</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="completedSteps">0</div>
+                                <div class="stat-label">Tamamlanan</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="completionRate">0%</div>
+                                <div class="stat-label">Tamamlanma Oranı</div>
+                            </div>
+                        </div>
+
+                        <div class="step-list" id="stepsList">
+                            <!-- Adımlar buraya dinamik olarak eklenecek -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -111,4 +267,79 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const responsibleSelect = document.getElementById('responsibleSelect');
+        const responsibleDetails = document.getElementById('responsibleDetails');
+
+        // Sorumluları yükle
+        fetch('/api/calendar/responsibles')
+            .then(response => response.json())
+            .then(responsibles => {
+                responsibles.forEach(responsible => {
+                    const option = document.createElement('option');
+                    option.value = responsible;
+                    option.textContent = responsible;
+                    responsibleSelect.appendChild(option);
+                });
+            });
+
+        // Sorumlu seçildiğinde detayları yükle
+        responsibleSelect.addEventListener('change', function () {
+            const responsible = this.value;
+            if (!responsible) {
+                responsibleDetails.style.display = 'none';
+                return;
+            }
+
+            // API'den seçilen sorumluya ait adımları al
+            fetch(`/api/responsible/${encodeURIComponent(responsible)}/steps`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('totalSteps').textContent = data.total_steps;
+                    document.getElementById('completedSteps').textContent = data.completed_steps;
+                    document.getElementById('completionRate').textContent = `${data.completion_rate}%`;
+
+                    const stepsList = document.getElementById('stepsList');
+                    stepsList.innerHTML = '';
+
+                    data.steps.forEach(step => {
+                        const stepItem = document.createElement('div');
+                        stepItem.className = 'step-item';
+                        stepItem.setAttribute('data-process-id', step.process_id);
+                        stepItem.innerHTML = `
+                            <div class="step-header">
+                                <h6 class="step-title">${step.name}</h6>
+                                <span class="step-status status-${step.status}">${getStatusText(step.status)}</span>
+                            </div>
+                            <div class="step-process">${step.process_name}</div>
+                        `;
+
+                        // Adıma tıklandığında süreç detay sayfasına yönlendir
+                        stepItem.addEventListener('click', function () {
+                            window.location.href = `/process/${step.process_id}#step_${step.id}`;
+                            // Modal'ı kapat
+                            const modal = bootstrap.Modal.getInstance(document.getElementById('responsibleModal'));
+                            modal.hide();
+                        });
+
+                        stepsList.appendChild(stepItem);
+                    });
+
+                    responsibleDetails.style.display = 'block';
+                });
+        });
+    });
+
+    function getStatusText(status) {
+        const statusTexts = {
+            'done': 'Tamamlandı',
+            'in_progress': 'Devam Ediyor',
+            'waiting': 'Beklemede',
+            'not_started': 'Başlanmadı'
+        };
+        return statusTexts[status] || status;
+    }
+</script>
 {% endblock %}

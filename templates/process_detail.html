@@ -99,8 +99,9 @@
                 <thead>
                     <tr>
                         <th style="width: 10%">Sıra</th>
-                        <th style="width: 45%">Adım Adı</th>
+                        <th style="width: 40%">Adım Adı</th>
                         <th style="width: 20%">Sorumlu</th>
+                        <th style="width: 5%">Deadline</th>
                         <th style="width: 15%">Durum</th>
                         <th style="width: 10%">İşlemler</th>
                     </tr>
@@ -114,8 +115,7 @@
                         data-completed-at-iso="{{ step.completed_at.strftime('%Y-%m-%d') if step.completed_at else '' }}"
                         data-description="{{ step.description or '' }}" data-step-name="{{ step.name }}"
                         data-responsible="{{ step.responsible or '' }}" data-status="{{ step.status }}"
-                        data-deadline="{{ step.deadline.strftime('%Y-%m-%dT%H:%M') if step.deadline else '' }}"
-                        style="cursor: pointer;">
+                        data-deadline="{{ step.deadline.strftime('%Y-%m-%dT%H:%M') if step.deadline else '' }}">
                         <td>
                             <div class="d-flex align-items-center">
                                 {% if step.parent_id %}
@@ -133,12 +133,6 @@
                                             value="{{ step.name }}" data-step-id="{{ step.id }}">
                                     </div>
                                     <div class="action-buttons d-flex gap-2 ms-auto">
-                                        {% if not process.is_started %}
-                                        <a href="{{ url_for('new_step', process_id=process.id, parent_id=step.id) }}"
-                                            class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-plus-lg"></i> Alt Adım
-                                        </a>
-                                        {% endif %}
                                         {% if step.type in ['python_script', 'sql_script', 'mail', 'sql_procedure'] and
                                         step.type != 'main_step' %}
                                         <button type="button" class="btn btn-sm btn-outline-secondary show-variables"
@@ -243,6 +237,12 @@
                             </div>
                         </td>
                         <td>
+                            <input type="date" class="form-control form-control-sm deadline-input"
+                                data-step-id="{{ step.id }}"
+                                value="{{ step.deadline.strftime('%Y-%m-%d') if step.deadline else '' }}"
+                                title="Deadline">
+                        </td>
+                        <td>
                             <div class="dropdown">
                                 <button class="btn btn-sm dropdown-toggle status-button 
                                     {% if step.status == 'done' %}btn-success
@@ -294,6 +294,10 @@
                         <td>
                             <div class="d-flex gap-2">
                                 {% if not process.is_started %}
+                                <a href="{{ url_for('new_step', process_id=process.id, parent_id=step.id) }}"
+                                    class="btn btn-sm btn-outline-primary" title="Alt Adım Ekle">
+                                    <i class="bi bi-plus-lg"></i>
+                                </a>
                                 <form action="{{ url_for('delete_step', step_id=step.id) }}" method="POST"
                                     class="d-inline delete-step-form">
                                     <button type="submit" class="btn btn-sm btn-danger">
@@ -315,6 +319,10 @@
                                     {% endif %}
                                 </div>
                                 {% endif %}
+                                <button type="button" class="btn btn-sm btn-info show-step-details"
+                                    data-step-id="{{ step.id }}" title="Adım Detayı">
+                                    <i class="bi bi-info"></i>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -448,6 +456,9 @@
 {% block scripts %}
 {{ super() }}
 <script src="{{ url_for('static', filename='js/mail.js') }}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js"></script>
 <style>
     [data-bs-theme="light"] .card-body {
         background-color: var(--bs-gray-100);
@@ -805,6 +816,10 @@
         pointer-events: auto;
     }
 
+    .show-step-details {
+        cursor: pointer !important;
+    }
+
     /* Saving Indicator Style */
     .saving-indicator {
         position: fixed;
@@ -823,6 +838,35 @@
     .saving-indicator.show {
         opacity: 1;
         transform: translateY(0);
+    }
+
+    /* Deadline Input Styles */
+    .deadline-container {
+        width: 120px;
+    }
+
+    .deadline-input {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 4px;
+        font-size: 0.95rem;
+        width: 90%;
+        margin-top: 0.5rem;
+    }
+
+    .deadline-input:focus {
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1);
+    }
+
+    [data-bs-theme="dark"] .deadline-input {
+        background-color: var(--bs-dark);
+        border-color: var(--bs-border-color);
+        color: var(--bs-body-color);
+    }
+
+    [data-bs-theme="dark"] .deadline-input:focus {
+        background-color: var(--bs-dark);
+        border-color: var(--bs-primary);
     }
 </style>
 <script>
@@ -1155,6 +1199,46 @@
                 localStorage.removeItem('lastViewedStepId');
             }
         }
+
+        document.querySelectorAll('.deadline-input').forEach(input => {
+            input.addEventListener('change', function () {
+                const stepId = this.dataset.stepId;
+                let value = this.value;
+                // Eğer saat yoksa, 09:00 ekle
+                if (value && !value.includes('T')) {
+                    value = value + 'T09:00';
+                }
+                fetch(`/step/${stepId}/update_deadline`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `deadline=${encodeURIComponent(value)}`
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showSavingIndicator('Deadline güncellendi', 'success');
+                            // Eğer modalda güncellendiyse tabloyu da güncelle
+                            const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
+                            if (row) {
+                                // Sadece tarih kısmını al
+                                const dateOnly = value.split('T')[0];
+                                const deadlineInput = row.querySelector('.deadline-input');
+                                if (deadlineInput) {
+                                    deadlineInput.value = dateOnly;
+                                }
+                                row.dataset.deadline = value;
+                            }
+                        } else {
+                            showSavingIndicator('Deadline güncellenemedi', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showSavingIndicator('Deadline güncellenirken hata oluştu', 'error');
+                    });
+            });
+        });
     });
 
     function initializeModal() {
@@ -1177,52 +1261,29 @@
         // Modal nesnesini oluştur
         const modal = new bootstrap.Modal(modalElement);
 
-        // Tüm adım satırlarına click event listener ekle
-        const rows = document.querySelectorAll('tr[data-step-id]');
-        console.log('Found rows:', rows.length);
-
-        rows.forEach(row => {
-            row.addEventListener('click', function (e) {
-                // Buton, form veya link tıklamalarını engelle
-                if (e.target.closest('button, form, a, .action-buttons')) {
-                    return;
-                }
-
-                console.log('Row clicked, opening modal...');
-
-                // Adım verilerini al
+        // Adım detayı butonlarına event listener ekle
+        document.querySelectorAll('.show-step-details').forEach(button => {
+            button.addEventListener('click', function () {
                 const stepId = this.dataset.stepId;
-                const stepType = this.dataset.stepType;
-                const description = this.dataset.description;
-                const filePath = this.dataset.filePath;
-                const completedAt = this.dataset.completedAt;
-                const completedAtIso = this.dataset.completedAtIso;
-                const stepNo = this.querySelector('td:first-child span')?.textContent || '';
-                const stepName = this.querySelector('.step-name')?.textContent || '';
-                const responsible = this.querySelector('.step-responsible')?.textContent.trim() || '';
-                const status = this.dataset.status;
-                const deadline = this.dataset.deadline;
+                const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
 
-                // Modal içindeki form alanlarını doldur
+                // Modal'a step ID'sini ekle
                 modalElement.dataset.stepId = stepId;
-                document.getElementById('modalStepNo').textContent = stepNo;
-                document.getElementById('modalStepName').textContent = stepName;
-                document.getElementById('modalStepNameInput').value = stepName;
-                document.getElementById('modalStepDescriptionInput').value = description || '';
-                document.getElementById('modalStepResponsibleInput').value = responsible === 'Sorumlu ekle...' ? '' : responsible;
-                document.getElementById('modalStepDeadlineInput').value = deadline || '';
+
+                // Modal içeriğini doldur
+                document.getElementById('modalStepNo').textContent = row.querySelector('td:first-child span').textContent;
+                document.getElementById('modalStepName').textContent = row.dataset.stepName;
+                document.getElementById('modalStepNameInput').value = row.dataset.stepName;
+                document.getElementById('modalStepDescriptionInput').value = row.dataset.description;
+                document.getElementById('modalStepResponsibleInput').value = row.dataset.responsible;
+                document.getElementById('modalStepDeadlineInput').value = row.dataset.deadline;
 
                 // Modalı göster
-                try {
-                    modal.show();
-                    console.log('Modal shown successfully');
-                } catch (error) {
-                    console.error('Error showing modal:', error);
-                }
+                modal.show();
             });
         });
 
-        // Form alanlarının değişikliklerini dinle ve otomatik kaydet
+        // Form alanlarının değişikliklerini dinle
         const formInputs = modalElement.querySelectorAll('input, textarea');
         formInputs.forEach(input => {
             input.addEventListener('change', async function () {
@@ -1232,7 +1293,6 @@
 
                 try {
                     let response;
-
                     // Deadline için özel endpoint kullan
                     if (field === 'deadline') {
                         response = await fetch(`/step/${stepId}/update_deadline`, {
@@ -1259,8 +1319,10 @@
                         if (row) {
                             if (field === 'name') {
                                 row.querySelector('.step-name').textContent = value;
+                                row.dataset.stepName = value;
                             } else if (field === 'responsible') {
                                 row.querySelector('.step-responsible').textContent = value || 'Sorumlu ekle...';
+                                row.dataset.responsible = value;
                             } else if (field === 'description') {
                                 row.dataset.description = value;
                             } else if (field === 'deadline') {
@@ -1277,6 +1339,48 @@
                 }
             });
         });
+
+        // Modal deadline inputunu dinle ve tabloyu güncelle
+        const modalDeadlineInput = document.getElementById('modalStepDeadlineInput');
+        if (modalDeadlineInput) {
+            modalDeadlineInput.addEventListener('change', function () {
+                const modal = document.getElementById('stepDetailModal');
+                const stepId = modal.dataset.stepId;
+                let value = this.value;
+                // Eğer saat yoksa, 09:00 ekle
+                if (value && !value.includes('T')) {
+                    value = value + 'T09:00';
+                }
+                fetch(`/step/${stepId}/update_deadline`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `deadline=${encodeURIComponent(value)}`
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showSavingIndicator('Deadline güncellendi', 'success');
+                            // Tabloyu da güncelle
+                            const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
+                            if (row) {
+                                const dateOnly = value.split('T')[0];
+                                const deadlineInput = row.querySelector('.deadline-input');
+                                if (deadlineInput) {
+                                    deadlineInput.value = dateOnly;
+                                }
+                                row.dataset.deadline = value;
+                            }
+                        } else {
+                            showSavingIndicator('Deadline güncellenemedi', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showSavingIndicator('Deadline güncellenirken hata oluştu', 'error');
+                    });
+            });
+        }
     }
 
     function getStepTypeName(type) {
@@ -1507,32 +1611,6 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    });
-
-    // Deadline değişikliği için event listener
-    document.querySelectorAll('input[type="datetime-local"][data-field="deadline"]').forEach(input => {
-        input.addEventListener('change', function () {
-            const stepId = this.dataset.stepId;
-            const formData = new FormData();
-            formData.append('deadline', this.value);
-
-            fetch(`/step/${stepId}/update_deadline`, {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast('Başarılı', 'Deadline başarıyla güncellendi', 'success');
-                    } else {
-                        showToast('Hata', 'Deadline güncellenirken bir hata oluştu', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('Hata', 'Deadline güncellenirken bir hata oluştu', 'error');
-                });
-        });
     });
 </script>
 {% endblock %}
