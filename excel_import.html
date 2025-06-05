@@ -109,7 +109,7 @@
                                 </div>
                             </div>
                             <!-- Sütun Eşleştirme -->
-                            <div class="mb-5">
+                            <div class="mb-5" id="columnMappingSection">
                                 <div class="d-flex align-items-center mb-3">
                                     <div class="step-number me-3">3</div>
                                     <h5 class="mb-0 theme-text">Sütun Eşleştirme</h5>
@@ -133,6 +133,8 @@
                             <div class="alert alert-success" id="successAlert" style="display: none;"></div>
                             <div class="d-flex justify-content-end mt-4">
                                 <button type="submit" class="btn btn-primary px-4">
+                                    <span class="spinner-border spinner-border-sm d-none" role="status"
+                                        aria-hidden="true"></span>
                                     <i class="fas fa-file-import"></i> İçe Aktarmayı Başlat
                                 </button>
                             </div>
@@ -352,18 +354,11 @@
             const existingTableSection = document.getElementById('existingTableSection');
             const newTableSection = document.getElementById('newTableSection');
             const newTableNameInput = document.getElementById('newTableName');
+            const columnMappingSection = document.getElementById('columnMappingSection');
             const columnMappingBody = document.getElementById('columnMappingBody');
             const errorAlert = document.getElementById('errorAlert');
             const successAlert = document.getElementById('successAlert');
-            const importButton = document.querySelector('button[type="submit"]');
-
-            // Elementlerin varlığını kontrol et
-            if (!form || !fileInput || !sheetSelect || !tableSelect || !createNewTableCheckbox ||
-                !existingTableSection || !newTableSection || !newTableNameInput || !columnMappingBody ||
-                !errorAlert || !successAlert || !importButton) {
-                console.error('Gerekli DOM elementleri bulunamadı');
-                return;
-            }
+            const importButton = form.querySelector('button[type="submit"]');
 
             let excelColumns = [];
             let oracleColumns = [];
@@ -396,11 +391,9 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            if (sheetSelect) {
-                                sheetSelect.innerHTML = '<option value="">Sayfa seçin</option>' +
-                                    data.sheets.map(sheet => `<option value="${sheet}">${sheet}</option>`).join('');
-                                sheetSelect.disabled = false;
-                            }
+                            sheetSelect.innerHTML = '<option value="">Sayfa seçin</option>' +
+                                data.sheets.map(sheet => `<option value="${sheet}">${sheet}</option>`).join('');
+                            sheetSelect.disabled = false;
                             checkImportButtonState();
                         } else {
                             showError('Sayfalar yüklenirken hata oluştu: ' + data.error);
@@ -432,7 +425,7 @@
                     // Sayfa seçimini sıfırla
                     sheetSelect.innerHTML = '<option value="">Önce Excel dosyası seçin</option>';
                     sheetSelect.disabled = true;
-                    columnMappingBody.style.display = 'none';
+                    columnMappingSection.style.display = 'none';
                     checkImportButtonState();
                 });
             });
@@ -485,8 +478,10 @@
                             if (data.success) {
                                 excelColumns = data.columns;
                                 columnTypes = data.column_types;
-                                // Sütun eşleştirme tablosunu gizle
-                                columnMappingBody.style.display = 'none';
+                                // Sütun eşleştirme tablosunu göster
+                                if (columnMappingSection) {
+                                    columnMappingSection.style.display = 'block';
+                                }
 
                                 // Eğer tablo seçiliyse sütun eşleştirmesini güncelle
                                 if (!createNewTableCheckbox.checked && tableSelect.value) {
@@ -521,7 +516,7 @@
                     tableSelect.disabled = false;
                     newTableNameInput.disabled = true;
                     // Sütun eşleştirme tablosunu gizle
-                    columnMappingBody.style.display = 'none';
+                    columnMappingSection.style.display = 'none';
                 }
                 checkImportButtonState();
             });
@@ -547,7 +542,7 @@
                         });
                 } else {
                     // Tablo seçimi kaldırıldığında sütun eşleştirme tablosunu gizle
-                    columnMappingBody.style.display = 'none';
+                    columnMappingSection.style.display = 'none';
                 }
                 checkImportButtonState();
             });
@@ -579,7 +574,7 @@
             // Sütun eşleştirme arayüzünü güncelle
             function updateColumnMapping() {
                 if (excelColumns.length > 0) {
-                    columnMappingBody.style.display = 'block';
+                    columnMappingSection.style.display = 'block';
                     columnMappingBody.innerHTML = '';
 
                     // Tablo başlıklarını güncelle
@@ -883,8 +878,13 @@
                     formData.append('import_mode', importMode);
                 }
 
-                importButton.disabled = true;
-                importButton.querySelector('.spinner-border').style.display = 'inline-block';
+                if (importButton) {
+                    importButton.disabled = true;
+                    const spinner = importButton.querySelector('.spinner-border');
+                    if (spinner) {
+                        spinner.classList.remove('d-none');
+                    }
+                }
 
                 fetch('/api/excel/import', {
                     method: 'POST',
@@ -906,11 +906,17 @@
                             sheetSelect.innerHTML = '<option value="">Önce Excel dosyası seçin</option>';
                             sheetSelect.disabled = true;
                             newTableNameInput.value = '';
-                            columnMappingBody.style.display = 'none';
-                            importButton.disabled = true;
+                            if (columnMappingSection) {
+                                columnMappingSection.style.display = 'none';
+                            }
+                            if (importButton) {
+                                importButton.disabled = true;
+                            }
                             // Başarı mesajını 5 saniye sonra gizle
                             setTimeout(() => {
-                                successAlert.style.display = 'none';
+                                if (successAlert) {
+                                    successAlert.style.display = 'none';
+                                }
                             }, 5000);
                         } else {
                             showError(data.error);
@@ -920,8 +926,13 @@
                         showError('İçe aktarma sırasında hata oluştu: ' + error);
                     })
                     .finally(() => {
-                        importButton.disabled = false;
-                        importButton.querySelector('.spinner-border').style.display = 'none';
+                        if (importButton) {
+                            importButton.disabled = false;
+                            const spinner = importButton.querySelector('.spinner-border');
+                            if (spinner) {
+                                spinner.classList.add('d-none');
+                            }
+                        }
                     });
             });
 
