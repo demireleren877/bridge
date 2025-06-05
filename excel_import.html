@@ -352,13 +352,18 @@
             const existingTableSection = document.getElementById('existingTableSection');
             const newTableSection = document.getElementById('newTableSection');
             const newTableNameInput = document.getElementById('newTableName');
-            const columnMappingSection = document.getElementById('columnMappingSection');
             const columnMappingBody = document.getElementById('columnMappingBody');
-            const previewInfo = document.getElementById('previewInfo');
-            const previewContent = document.getElementById('previewContent');
             const errorAlert = document.getElementById('errorAlert');
             const successAlert = document.getElementById('successAlert');
-            const importButton = document.getElementById('importButton');
+            const importButton = document.querySelector('button[type="submit"]');
+
+            // Elementlerin varlığını kontrol et
+            if (!form || !fileInput || !sheetSelect || !tableSelect || !createNewTableCheckbox ||
+                !existingTableSection || !newTableSection || !newTableNameInput || !columnMappingBody ||
+                !errorAlert || !successAlert || !importButton) {
+                console.error('Gerekli DOM elementleri bulunamadı');
+                return;
+            }
 
             let excelColumns = [];
             let oracleColumns = [];
@@ -391,9 +396,11 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            sheetSelect.innerHTML = '<option value="">Sayfa seçin</option>' +
-                                data.sheets.map(sheet => `<option value="${sheet}">${sheet}</option>`).join('');
-                            sheetSelect.disabled = false;
+                            if (sheetSelect) {
+                                sheetSelect.innerHTML = '<option value="">Sayfa seçin</option>' +
+                                    data.sheets.map(sheet => `<option value="${sheet}">${sheet}</option>`).join('');
+                                sheetSelect.disabled = false;
+                            }
                             checkImportButtonState();
                         } else {
                             showError('Sayfalar yüklenirken hata oluştu: ' + data.error);
@@ -425,7 +432,7 @@
                     // Sayfa seçimini sıfırla
                     sheetSelect.innerHTML = '<option value="">Önce Excel dosyası seçin</option>';
                     sheetSelect.disabled = true;
-                    columnMappingSection.style.display = 'none';
+                    columnMappingBody.style.display = 'none';
                     checkImportButtonState();
                 });
             });
@@ -479,7 +486,7 @@
                                 excelColumns = data.columns;
                                 columnTypes = data.column_types;
                                 // Sütun eşleştirme tablosunu gizle
-                                columnMappingSection.style.display = 'none';
+                                columnMappingBody.style.display = 'none';
 
                                 // Eğer tablo seçiliyse sütun eşleştirmesini güncelle
                                 if (!createNewTableCheckbox.checked && tableSelect.value) {
@@ -514,7 +521,7 @@
                     tableSelect.disabled = false;
                     newTableNameInput.disabled = true;
                     // Sütun eşleştirme tablosunu gizle
-                    columnMappingSection.style.display = 'none';
+                    columnMappingBody.style.display = 'none';
                 }
                 checkImportButtonState();
             });
@@ -540,7 +547,7 @@
                         });
                 } else {
                     // Tablo seçimi kaldırıldığında sütun eşleştirme tablosunu gizle
-                    columnMappingSection.style.display = 'none';
+                    columnMappingBody.style.display = 'none';
                 }
                 checkImportButtonState();
             });
@@ -572,7 +579,7 @@
             // Sütun eşleştirme arayüzünü güncelle
             function updateColumnMapping() {
                 if (excelColumns.length > 0) {
-                    columnMappingSection.style.display = 'block';
+                    columnMappingBody.style.display = 'block';
                     columnMappingBody.innerHTML = '';
 
                     // Tablo başlıklarını güncelle
@@ -899,7 +906,7 @@
                             sheetSelect.innerHTML = '<option value="">Önce Excel dosyası seçin</option>';
                             sheetSelect.disabled = true;
                             newTableNameInput.value = '';
-                            columnMappingSection.style.display = 'none';
+                            columnMappingBody.style.display = 'none';
                             importButton.disabled = true;
                             // Başarı mesajını 5 saniye sonra gizle
                             setTimeout(() => {
