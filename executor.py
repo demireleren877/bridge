@@ -16,8 +16,6 @@ if IS_WINDOWS:
     import win32com.client
     import pythoncom
 
-import cx_Oracle
-
 class ProcessExecutor:
     _instance = None
     _db_path = None  
@@ -46,15 +44,6 @@ class ProcessExecutor:
             'dsn': dsn
         }
 
-    @classmethod
-    def get_oracle_connection(cls):
-        if not all(cls._oracle_config.values()):
-            raise ValueError("Oracle bağlantı bilgileri eksik")
-        return cx_Oracle.connect(
-            cls._oracle_config['username'],
-            cls._oracle_config['password'],
-            cls._oracle_config['dsn']
-        )
 
     @classmethod
     def _check_db_process_status(cls):
@@ -307,54 +296,7 @@ class ProcessExecutor:
             }
 
    
-    @staticmethod
-    def execute_sql_script(file_path, is_procedure=False, procedure_params=None):        
-        check_result = ProcessExecutor.check_process_started()
-        if check_result:
-            return check_result
-        try:            
-            with open(file_path, 'r') as file:
-                sql_script = file.read()
-            conn = ProcessExecutor.get_oracle_connection()
-            cursor = conn.cursor()
-            
-            try:
-                if is_procedure:
-                    if not procedure_params:
-                        procedure_params = []
-                    cursor.callproc(sql_script, procedure_params)
-                    conn.commit()
-                    return {
-                        'success': True,
-                        'output': "Oracle prosedürü başarıyla çalıştırıldı",
-                        'error': None
-                    }
-                else:
-                    if ';' in sql_script:
-                        sql_script = f"BEGIN\n{sql_script}\nEND;"
-                    cursor.execute(sql_script)
-                    conn.commit()
-                    return {
-                        'success': True,
-                        'output': "Oracle SQL script başarıyla çalıştırıldı",
-                        'error': None
-                    }
-            except cx_Oracle.Error as error:
-                return {
-                    'success': False,
-                    'output': None,
-                    'error': f"Oracle hatası: {str(error)}"
-                }
-            finally:
-                cursor.close()
-                conn.close()
-                
-        except Exception as e:
-            return {
-                'success': False,
-                'output': None,
-                'error': str(e)
-            }
+    
 
     @staticmethod
     def execute_step(step_type, file_path, **kwargs):
