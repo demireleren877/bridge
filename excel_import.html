@@ -624,6 +624,70 @@
             }
         });
 
+        // İşlemi Kaydet butonu: Modalı aç
+        const saveCurrentProcessBtn = document.getElementById('saveCurrentProcess');
+        const saveProcessModal = new bootstrap.Modal(document.getElementById('saveProcessModal'));
+        saveCurrentProcessBtn.addEventListener('click', function () {
+            document.getElementById('processName').value = '';
+            saveProcessModal.show();
+        });
+
+        // Modal içindeki Kaydet butonu
+        document.getElementById('saveProcessButton').addEventListener('click', function () {
+            const processName = document.getElementById('processName').value.trim();
+            if (!processName) {
+                alert('Lütfen işlem için bir isim girin.');
+                return;
+            }
+            // Formdaki mevcut ayarları topla
+            const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
+            const sheetName = sheetSelect.value;
+            const createNewTable = createNewTableCheckbox.checked;
+            const newTableName = newTableNameInput.value.trim();
+            const tableName = tableSelect.value;
+            const importMode = document.querySelector('input[name="importMode"]:checked')?.value;
+            const mappings = [];
+            document.querySelectorAll('#columnMappingBody tr').forEach(row => {
+                const excelCol = row.cells[0].textContent;
+                const oracleCol = createNewTableCheckbox.checked ?
+                    row.cells[1].textContent :
+                    row.cells[1].querySelector('select').value;
+                const dataType = row.cells[2].querySelector('select').value;
+                mappings.push({
+                    excel_column: excelCol,
+                    oracle_column: oracleCol,
+                    oracle_type: dataType
+                });
+            });
+            // API'ye kaydet
+            fetch('/api/excel/save_process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    process_name: processName,
+                    file_input_mode: fileInputMode,
+                    sheet_name: sheetName,
+                    create_new_table: createNewTable,
+                    new_table_name: newTableName,
+                    table_name: tableName,
+                    import_mode: importMode,
+                    column_mappings: mappings
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        saveProcessModal.hide();
+                        showSuccess('İşlem başarıyla kaydedildi.');
+                    } else {
+                        alert('Kaydetme sırasında hata: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('Kaydetme sırasında hata: ' + error);
+                });
+        });
+
         // Form gönderimi
         form.addEventListener('submit', function (e) {
             e.preventDefault();
