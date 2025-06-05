@@ -2,7 +2,6 @@
 
 {% block head %}
 {{ super() }}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 {% endblock %}
 
@@ -18,10 +17,10 @@
                             <div>
                                 <button type="button" class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal"
                                     data-bs-target="#savedProcessesModal">
-                                    <i class="fas fa-folder-open"></i> Kayıtlı İşlemler
+                                    <i class="bi bi-folder2-open"></i> Kayıtlı İşlemler
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-success" id="saveCurrentProcess">
-                                    <i class="fas fa-save"></i> Bu İşlemi Kaydet
+                                    <i class="bi bi-save"></i> Bu İşlemi Kaydet
                                 </button>
                             </div>
                         </div>
@@ -130,7 +129,7 @@
                                         </table>
                                     </div>
                                     <div class="alert theme-alert mt-3">
-                                        <small><i class="fas fa-info-circle"></i> Excel sütun isimleri otomatik olarak
+                                        <small><i class="bi bi-info-circle"></i> Excel sütun isimleri otomatik olarak
                                             Oracle uyumlu formata dönüştürülür.</small>
                                     </div>
                                 </div>
@@ -141,7 +140,7 @@
                                 <button type="submit" class="btn btn-primary px-4">
                                     <span class="spinner-border spinner-border-sm d-none" role="status"
                                         aria-hidden="true"></span>
-                                    <i class="fas fa-file-import"></i> İçe Aktarmayı Başlat
+                                    <i class="bi bi-file-earmark-arrow-up"></i> İçe Aktarmayı Başlat
                                 </button>
                             </div>
                         </form>
@@ -189,18 +188,23 @@
     <div class="modal fade" id="saveProcessModal" tabindex="-1" aria-labelledby="saveProcessModalLabel"
         aria-hidden="true">
         <div class="modal-dialog">
-            <div class="modal-content bg-light">
-                <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title" id="saveProcessModalLabel">İşlemi Kaydet</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+            <div class="modal-content theme-card">
+                <div class="modal-header theme-header">
+                    <h5 class="modal-title theme-text" id="saveProcessModalLabel">
+                        <i class="bi bi-save me-2"></i>İşlemi Kaydet
+                    </h5>
+                    <button type="button" class="btn-close theme-close" data-bs-dismiss="modal"
                         aria-label="Kapat"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body theme-body">
                     <div class="mb-3">
-                        <label for="processName" class="form-label">İşlem Adı</label>
-                        <input type="text" class="form-control" id="processName" placeholder="İşlem adını girin">
+                        <label for="processName" class="form-label theme-text">İşlem Adı</label>
+                        <input type="text" class="form-control theme-input" id="processName"
+                            placeholder="İşlem adını girin">
                     </div>
-                    <button type="button" class="btn btn-primary" id="saveProcessButton">Kaydet</button>
+                    <button type="button" class="btn btn-primary" id="saveProcessButton">
+                        <i class="bi bi-save me-1"></i>Kaydet
+                    </button>
                 </div>
             </div>
         </div>
@@ -1020,10 +1024,17 @@
                             tbody.innerHTML = '';
 
                             data.processes.forEach(process => {
+                                // Dosya yolunu kısalt
+                                const shortPath = process.file_path.length > 50
+                                    ? process.file_path.substring(0, 25) + '...' + process.file_path.substring(process.file_path.length - 25)
+                                    : process.file_path;
+
                                 const row = document.createElement('tr');
                                 row.innerHTML = `
                             <td class="theme-text">${process.name}</td>
-                            <td class="theme-text">${process.file_path}</td>
+                            <td class="theme-text text-truncate" style="max-width: 200px;" data-bs-toggle="tooltip" title="${process.file_path}">
+                                ${shortPath}
+                            </td>
                             <td class="theme-text">${process.table_name}</td>
                             <td class="theme-text">${process.last_used_at ? new Date(process.last_used_at).toLocaleString() : '-'}</td>
                             <td class="text-end">
@@ -1036,6 +1047,12 @@
                             </td>
                         `;
                                 tbody.appendChild(row);
+                            });
+
+                            // Tooltip'leri etkinleştir
+                            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                                return new bootstrap.Tooltip(tooltipTriggerEl);
                             });
                         } else {
                             showError('Kayıtlı işlemler yüklenirken hata oluştu: ' + data.error);
