@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% endblock %}
+
 {% block content %}
 <div class="container mt-5">
     <div class="row justify-content-center">
@@ -149,27 +155,31 @@
     <div class="modal fade" id="savedProcessesModal" tabindex="-1" aria-labelledby="savedProcessesModalLabel"
         aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content bg-light">
-                <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title" id="savedProcessesModalLabel">Kayıtlı İşlemler</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+            <div class="modal-content theme-card">
+                <div class="modal-header theme-header">
+                    <h5 class="modal-title theme-text" id="savedProcessesModalLabel">
+                        <i class="bi bi-clock-history me-2"></i>Kayıtlı İşlemler
+                    </h5>
+                    <button type="button" class="btn-close theme-close" data-bs-dismiss="modal"
                         aria-label="Kapat"></button>
                 </div>
-                <div class="modal-body">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>İsim</th>
-                                <th>Dosya</th>
-                                <th>Tablo</th>
-                                <th>Son Kullanım</th>
-                                <th>İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody id="savedProcessesList">
-                            <!-- JS ile doldurulacak -->
-                        </tbody>
-                    </table>
+                <div class="modal-body theme-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover theme-table align-middle">
+                            <thead>
+                                <tr>
+                                    <th class="theme-text">İsim</th>
+                                    <th class="theme-text">Dosya</th>
+                                    <th class="theme-text">Tablo</th>
+                                    <th class="theme-text">Son Kullanım</th>
+                                    <th class="theme-text text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="savedProcessesList">
+                                <!-- JS ile doldurulacak -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -215,6 +225,9 @@
             --light-step-bg: #e9ecef;
             --light-step-text: #495057;
             --light-shadow: rgba(0, 0, 0, 0.05);
+            --light-modal-bg: #ffffff;
+            --light-modal-header-bg: #f8f9fa;
+            --light-modal-border: #dee2e6;
         }
 
         [data-bs-theme="dark"] {
@@ -234,6 +247,9 @@
             --light-step-bg: #343a40;
             --light-step-text: #adb5bd;
             --light-shadow: rgba(0, 0, 0, 0.2);
+            --light-modal-bg: #212529;
+            --light-modal-header-bg: #343a40;
+            --light-modal-border: #495057;
         }
 
         /* Tema Sınıfları */
@@ -303,7 +319,53 @@
         }
 
         .theme-modal {
-            background-color: var(--light-card-bg);
+            background-color: var(--light-modal-bg);
+            border-color: var(--light-modal-border);
+        }
+
+        .theme-modal .modal-header {
+            background-color: var(--light-modal-header-bg);
+            border-bottom-color: var(--light-modal-border);
+        }
+
+        .theme-modal .modal-body {
+            background-color: var(--light-modal-bg);
+        }
+
+        .theme-modal .table {
+            color: var(--light-text);
+        }
+
+        .theme-modal .table th {
+            background-color: var(--light-modal-header-bg);
+            border-bottom-color: var(--light-modal-border);
+        }
+
+        .theme-modal .table td {
+            border-color: var(--light-modal-border);
+        }
+
+        .theme-modal .btn-close {
+            filter: var(--light-text) brightness(0) invert(1);
+        }
+
+        .theme-modal .btn-outline-primary {
+            color: var(--light-text);
+            border-color: var(--light-border);
+        }
+
+        .theme-modal .btn-outline-primary:hover {
+            background-color: var(--light-modal-header-bg);
+            border-color: var(--light-border);
+        }
+
+        .theme-modal .btn-outline-danger {
+            color: var(--light-text);
+            border-color: var(--light-border);
+        }
+
+        .theme-modal .btn-outline-danger:hover {
+            background-color: var(--light-modal-header-bg);
             border-color: var(--light-border);
         }
 
@@ -960,16 +1022,16 @@
                             data.processes.forEach(process => {
                                 const row = document.createElement('tr');
                                 row.innerHTML = `
-                            <td>${process.name}</td>
-                            <td>${process.file_path}</td>
-                            <td>${process.table_name}</td>
-                            <td>${process.last_used_at ? new Date(process.last_used_at).toLocaleString() : '-'}</td>
-                            <td>
-                                <button class="btn btn-sm btn-primary me-1" onclick="loadProcess(${process.id})">
-                                    <i class="fas fa-play"></i> Çalıştır
+                            <td class="theme-text">${process.name}</td>
+                            <td class="theme-text">${process.file_path}</td>
+                            <td class="theme-text">${process.table_name}</td>
+                            <td class="theme-text">${process.last_used_at ? new Date(process.last_used_at).toLocaleString() : '-'}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary me-1" onclick="loadProcess(${process.id})" title="Çalıştır">
+                                    <i class="bi bi-play-fill"></i>
                                 </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteProcess(${process.id})">
-                                    <i class="fas fa-trash"></i>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteProcess(${process.id})" title="Sil">
+                                    <i class="bi bi-trash"></i>
                                 </button>
                             </td>
                         `;
