@@ -418,12 +418,24 @@ def new_step(process_id):
             name=request.form['name'],
             description=request.form['description'],
             type=request.form['type'],
-            file_path=request.form.get('file_path', ''),
+            file_path='',  # Başlangıçta boş olarak ayarla
             order=request.form.get('order', 0),
             parent_id=parent_id,
             process_id=process_id,
             responsible=request.form.get('responsible', '')
         )
+        
+        # Eğer SQL prosedür tipi seçildiyse, file_path'i ayarla
+        if step.type == 'sql_procedure':
+            package_name = request.form.get('package_name')
+            procedure_name = request.form.get('procedure_name')
+            
+            if package_name and procedure_name:
+                # file_path formatı: "PACKAGE_NAME.PROCEDURE_NAME" veya "PROCEDURE_NAME" (bağımsız prosedür için)
+                if package_name == 'STANDALONE':
+                    step.file_path = procedure_name
+                else:
+                    step.file_path = f"{package_name}.{procedure_name}"
         
         db.session.add(step)
         db.session.flush()  # ID'yi almak için flush
@@ -442,26 +454,45 @@ def new_step(process_id):
                 )
                 cursor = connection.cursor()
                 
-                query = """
-                SELECT 
-                    argument_name,
-                    data_type,
-                    in_out
-                FROM 
-                    all_arguments
-                WHERE 
-                    object_name = :package_name
-                    AND procedure_name = :procedure_name
-                    AND owner = :owner
-                ORDER BY 
-                    position
-                """
-                
-                cursor.execute(query, {
-                    'package_name': package_name,
-                    'procedure_name': procedure_name,
-                    'owner': app.config['ORACLE_USERNAME'].upper()
-                })
+                # Bağımsız prosedür veya paket içindeki prosedür için farklı sorgular
+                if package_name == 'STANDALONE':
+                    query = """
+                    SELECT 
+                        argument_name,
+                        data_type,
+                        in_out
+                    FROM 
+                        all_arguments
+                    WHERE 
+                        object_name = :procedure_name
+                        AND owner = :owner
+                    ORDER BY 
+                        position
+                    """
+                    cursor.execute(query, {
+                        'procedure_name': procedure_name,
+                        'owner': app.config['ORACLE_USERNAME'].upper()
+                    })
+                else:
+                    query = """
+                    SELECT 
+                        argument_name,
+                        data_type,
+                        in_out
+                    FROM 
+                        all_arguments
+                    WHERE 
+                        object_name = :package_name
+                        AND procedure_name = :procedure_name
+                        AND owner = :owner
+                    ORDER BY 
+                        position
+                    """
+                    cursor.execute(query, {
+                        'package_name': package_name,
+                        'procedure_name': procedure_name,
+                        'owner': app.config['ORACLE_USERNAME'].upper()
+                    })
                 
                 params = cursor.fetchall()
                 cursor.close()
