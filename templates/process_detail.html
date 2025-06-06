@@ -71,6 +71,7 @@
                             <option value="sql_script">SQL Script</option>
                             <option value="sql_procedure">SQL Prosedür</option>
                             <option value="mail">Mail</option>
+                            <option value="excel_import">Excel Import</option>
                         </select>
                         <label for="typeFilter">Adım Tipi</label>
                     </div>
@@ -133,7 +134,8 @@
                                             value="{{ step.name }}" data-step-id="{{ step.id }}">
                                     </div>
                                     <div class="action-buttons d-flex gap-2 ms-auto">
-                                        {% if step.type in ['python_script', 'sql_script', 'mail', 'sql_procedure'] and
+                                        {% if step.type in ['python_script', 'sql_script', 'mail', 'sql_procedure',
+                                        'excel_import'] and
                                         step.type != 'main_step' %}
                                         <button type="button" class="btn btn-sm btn-outline-secondary show-variables"
                                             data-step-id="{{ step.id }}">
@@ -945,7 +947,7 @@
                 });
                 const result = await response.json();
 
-                if (result.success) {
+                if (result.status === 'success') {
                     if (stepType === 'mail') {
                         // Mail gönderimi başarılı olduğunda adımı beklemede olarak işaretle
                         updateStepStatus(stepId, 'waiting', 'Beklemede');
@@ -1104,89 +1106,169 @@
     document.querySelectorAll('.show-variables').forEach(button => {
         button.addEventListener('click', () => {
             const stepId = button.dataset.stepId;
+            const stepType = button.closest('tr').dataset.stepType;
             document.getElementById('modalStepId').value = stepId;
 
             // Değişkenleri yükle
             const variablesContainer = document.querySelector('.variables-container');
-            const stepVariables = document.getElementById(`variables-data-${stepId}`);
-            if (stepVariables) {
-                variablesContainer.innerHTML = stepVariables.innerHTML;
 
-                // Mail durumlarını senkronize et
-                const mainPageMailStatuses = document.querySelectorAll(`tr[data-step-id="${stepId}"] .mail-status`);
-                mainPageMailStatuses.forEach(mainStatus => {
-                    const subject = mainStatus.dataset.mailSubject;
-                    const modalStatus = variablesContainer.querySelector(`.mail-status[data-mail-subject="${subject}"]`);
-                    if (modalStatus && mainStatus.innerHTML) {
-                        modalStatus.innerHTML = mainStatus.innerHTML;
-                        modalStatus.className = mainStatus.className;
-                    }
-                });
-
-                // Mail kartlarını tıklanabilir yap
-                variablesContainer.querySelectorAll('.mail-variable-card .card-header').forEach(header => {
-                    header.style.cursor = 'pointer';
-                    header.addEventListener('click', (e) => {
-                        // Silme butonuna tıklandığında kartın açılmasını engelle
-                        if (e.target.closest('.delete-variable')) {
-                            return;
-                        }
-                        const details = header.closest('.card').querySelector('.mail-details');
-                        details.classList.toggle('d-none');
-                    });
-                });
-
-                // Değişken değerlerini güncelle
-                variablesContainer.querySelectorAll('.variable-value').forEach(input => {
-                    input.addEventListener('change', async () => {
-                        const variableId = input.dataset.variableId;
-                        const value = input.type === 'checkbox' ? input.checked : input.value;
-
-                        try {
-                            const response = await fetch(`/variable/${variableId}/update`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded',
-                                },
-                                body: `field=default_value&value=${encodeURIComponent(value)}`
+            if (stepType === 'excel_import') {
+                // Excel import için özel görünüm
+                fetch(`/step/${stepId}/import_process`)
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(data => {
+                                throw new Error(data.error || 'Import process bilgisi alınamadı');
                             });
+                        }
+                        return response.json();
+                    })
+                    .then(importProcess => {
+                        if (!importProcess) {
+                            throw new Error('Import process bilgisi bulunamadı');
+                        }
+                        variablesContainer.innerHTML = `
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Excel Import Detayları</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Dosya Yolu</label>
+                                        <input type="text" class="form-control" value="${importProcess.file_path || ''}" readonly>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Sayfa Adı</label>
+                                        <input type="text" class="form-control" value="${importProcess.sheet_name || ''}" readonly>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Hedef Tablo</label>
+                                        <input type="text" class="form-control" value="${importProcess.table_name || ''}" readonly>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Import Modu</label>
+                                        <input type="text" class="form-control" value="${importProcess.import_mode === 'append' ? 'Ekle' : 'Yeniden Oluştur'}" readonly>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Kolon Eşleştirmeleri</label>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Excel Kolonu</th>
+                                                        <th>Oracle Kolonu</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${JSON.parse(importProcess.column_mappings || '[]').map(mapping => `
+                                                        <tr>
+                                                            <td>${mapping.excel_column || ''}</td>
+                                                            <td>${mapping.oracle_column || ''}</td>
+                                                        </tr>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Son Kullanım</label>
+                                        <input type="text" class="form-control" value="${importProcess.last_used_at || 'Henüz kullanılmadı'}" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    })
+                    .catch(error => {
+                        console.error('Import process bilgisi alınırken hata oluştu:', error);
+                        variablesContainer.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                ${error.message || 'Import process bilgisi alınırken hata oluştu'}
+                            </div>
+                        `;
+                    });
+            } else {
+                // Diğer adım tipleri için normal değişken görünümü
+                const stepVariables = document.getElementById(`variables-data-${stepId}`);
+                if (stepVariables) {
+                    variablesContainer.innerHTML = stepVariables.innerHTML;
 
-                            const result = await response.json();
+                    // Mail durumlarını senkronize et
+                    const mainPageMailStatuses = document.querySelectorAll(`tr[data-step-id="${stepId}"] .mail-status`);
+                    mainPageMailStatuses.forEach(mainStatus => {
+                        const subject = mainStatus.dataset.mailSubject;
+                        const modalStatus = variablesContainer.querySelector(`.mail-status[data-mail-subject="${subject}"]`);
+                        if (modalStatus && mainStatus.innerHTML) {
+                            modalStatus.innerHTML = mainStatus.innerHTML;
+                            modalStatus.className = mainStatus.className;
+                        }
+                    });
 
-                            if (!result.success) {
-                                console.error('Değişken güncellenirken hata oluştu');
-                                input.classList.add('is-invalid');
-                                setTimeout(() => input.classList.remove('is-invalid'), 2000);
-                            } else {
-                                // Başarılı güncelleme görsel geri bildirimi
-                                input.classList.add('is-valid');
-                                setTimeout(() => input.classList.remove('is-valid'), 2000);
+                    // Mail kartlarını tıklanabilir yap
+                    variablesContainer.querySelectorAll('.mail-variable-card .card-header').forEach(header => {
+                        header.style.cursor = 'pointer';
+                        header.addEventListener('click', (e) => {
+                            // Silme butonuna tıklandığında kartın açılmasını engelle
+                            if (e.target.closest('.delete-variable')) {
+                                return;
+                            }
+                            const details = header.closest('.card').querySelector('.mail-details');
+                            details.classList.toggle('d-none');
+                        });
+                    });
 
-                                // Ana sayfadaki değişken değerini güncelle
-                                const originalInput = stepVariables.querySelector(`[data-variable-id="${variableId}"] .variable-value`);
-                                if (originalInput) {
-                                    if (input.type === 'checkbox') {
-                                        originalInput.checked = value;
-                                    } else {
-                                        originalInput.value = value;
+                    // Değişken değerlerini güncelle
+                    variablesContainer.querySelectorAll('.variable-value').forEach(input => {
+                        input.addEventListener('change', async () => {
+                            const variableId = input.dataset.variableId;
+                            const value = input.type === 'checkbox' ? input.checked : input.value;
+
+                            try {
+                                const response = await fetch(`/variable/${variableId}/update`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/x-www-form-urlencoded',
+                                    },
+                                    body: `field=default_value&value=${encodeURIComponent(value)}`
+                                });
+
+                                const result = await response.json();
+
+                                if (!result.success) {
+                                    console.error('Değişken güncellenirken hata oluştu');
+                                    input.classList.add('is-invalid');
+                                    setTimeout(() => input.classList.remove('is-invalid'), 2000);
+                                } else {
+                                    // Başarılı güncelleme görsel geri bildirimi
+                                    input.classList.add('is-valid');
+                                    setTimeout(() => input.classList.remove('is-valid'), 2000);
+
+                                    // Ana sayfadaki değişken değerini güncelle
+                                    const originalInput = stepVariables.querySelector(`[data-variable-id="${variableId}"] .variable-value`);
+                                    if (originalInput) {
+                                        if (input.type === 'checkbox') {
+                                            originalInput.checked = value;
+                                        } else {
+                                            originalInput.value = value;
+                                        }
                                     }
                                 }
+                            } catch (error) {
+                                console.error('Değişken güncellenirken hata oluştu:', error);
+                                input.classList.add('is-invalid');
+                                setTimeout(() => input.classList.remove('is-invalid'), 2000);
                             }
-                        } catch (error) {
-                            console.error('Değişken güncellenirken hata oluştu:', error);
-                            input.classList.add('is-invalid');
-                            setTimeout(() => input.classList.remove('is-invalid'), 2000);
-                        }
+                        });
                     });
-                });
 
-                // Silme butonlarına event listener ekle
-                variablesContainer.querySelectorAll('.delete-variable').forEach(button => {
-                    button.addEventListener('click', () => {
-                        const variableId = button.dataset.variableId;
-                        deleteVariable(variableId);
+                    // Silme butonlarına event listener ekle
+                    variablesContainer.querySelectorAll('.delete-variable').forEach(button => {
+                        button.addEventListener('click', () => {
+                            const variableId = button.dataset.variableId;
+                            deleteVariable(variableId);
+                        });
                     });
-                });
+                }
             }
 
             // Modalı göster
@@ -1404,7 +1486,8 @@
             'python_script': 'Python Script',
             'sql_script': 'SQL Script',
             'sql_procedure': 'SQL Prosedür',
-            'mail': 'Mail'
+            'mail': 'Mail',
+            'excel_import': 'Excel Import'
         };
         return types[type] || type;
     }

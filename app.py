@@ -486,8 +486,7 @@ def execute_step(step_id):
                 return jsonify({'status': 'error', 'message': 'Seçilen import process bulunamadı.'})
             
             # Import process'i çalıştır
-            executor = ProcessExecutor()
-            result = executor.execute_import_process(import_process)
+            result = ProcessExecutor.execute_import_process(import_process)
             
             if result.get('status') == 'success':
                 step.status = 'done'
@@ -498,16 +497,15 @@ def execute_step(step_id):
                 return jsonify({'status': 'error', 'message': result.get('message', 'Excel import sırasında bir hata oluştu.')})
         else:
             # Diğer adım tipleri için mevcut işlemleri yap
-            executor = ProcessExecutor()
-            result = executor.execute_step(step)
+            result = ProcessExecutor.execute_step(step.type, step.file_path, output_dir=None, variables=step.variables)
             
-            if result.get('status') == 'success':
+            if result.get('success'):
                 step.status = 'done'
                 step.completed_at = datetime.now()
                 db.session.commit()
                 return jsonify({'status': 'success', 'message': 'Adım başarıyla tamamlandı.'})
             else:
-                return jsonify({'status': 'error', 'message': result.get('message', 'Adım çalıştırılırken bir hata oluştu.')})
+                return jsonify({'status': 'error', 'message': result.get('error', 'Adım çalıştırılırken bir hata oluştu.')})
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)})
@@ -2013,6 +2011,36 @@ def execute_import_process(process_id):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/step/<int:step_id>/import_process')
+def get_step_import_process(step_id):
+    """Adıma ait import process bilgilerini döndürür"""
+    try:
+        step = Step.query.get_or_404(step_id)
+        if step.type != 'excel_import':
+            return jsonify({'error': 'Bu adım bir Excel import adımı değil'}), 400
+            
+        if not step.import_process_id:
+            return jsonify({'error': 'Bu adım için import process tanımlanmamış'}), 404
+            
+        import_process = ImportProcess.query.get(step.import_process_id)
+        if not import_process:
+            return jsonify({'error': 'Import process bulunamadı'}), 404
+            
+        # Import process bilgilerini hazırla
+        process_data = {
+            'file_path': import_process.file_path,
+            'sheet_name': import_process.sheet_name,
+            'table_name': import_process.table_name,
+            'import_mode': import_process.import_mode,
+            'column_mappings': import_process.column_mappings,
+            'last_used_at': import_process.last_used_at.strftime('%Y-%m-%d %H:%M:%S') if import_process.last_used_at else None
+        }
+            
+        return jsonify(process_data)
+    except Exception as e:
+        print(f"Import process bilgisi alınırken hata oluştu: {str(e)}")
+        return jsonify({'error': f'Import process bilgisi alınırken hata oluştu: {str(e)}'}), 500
 
 if __name__ == '__main__':
     with app.app_context():
