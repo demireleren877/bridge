@@ -426,3 +426,53 @@ class ProcessExecutor:
                 'status': 'error',
                 'message': f'Excel import sırasında hata oluştu: {str(e)}'
             } 
+
+    def execute_step(self, step, output_dir=None, variables=None):
+        """Adımı çalıştırır"""
+        try:
+            # Eğer süreç zaten başlamışsa hata ver
+            if not self.process.is_started:
+                return {
+                    'status': 'error',
+                    'message': 'Süreç henüz başlatılmamış'
+                }
+
+            # Adım tipine göre işlem yap
+            if step.type == 'python_script':
+                # Python script için file_path gerekli
+                if not step.file_path:
+                    return {
+                        'status': 'error',
+                        'message': 'Python script dosyası belirtilmemiş'
+                    }
+                return self.execute_python_script(step.file_path, output_dir, variables)
+            elif step.type == 'sql_script':
+                # SQL script için file_path gerekli
+                if not step.file_path:
+                    return {
+                        'status': 'error',
+                        'message': 'SQL script dosyası belirtilmemiş'
+                    }
+                return self.execute_sql_script(step)
+            elif step.type == 'sql_procedure':
+                return self.execute_sql_procedure(step)
+            elif step.type == 'mail':
+                return self.execute_mail(step)
+            elif step.type == 'excel_import':
+                # Excel import için file_path gerekli
+                if not step.file_path:
+                    return {
+                        'status': 'error',
+                        'message': 'Excel dosyası belirtilmemiş'
+                    }
+                return self.execute_excel_import(step)
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'Bilinmeyen adım tipi: {step.type}'
+                }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': str(e)
+            } 
