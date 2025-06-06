@@ -1129,191 +1129,114 @@
                         }
                         variablesContainer.innerHTML = `
                             <div class="card mb-3">
-                                <div class="card-header d-flex justify-content-between align-items-center">
+                                <div class="card-header">
                                     <h6 class="mb-0">Excel Import Detayları</h6>
-                                    <button type="button" class="btn btn-sm btn-primary edit-import-process">
-                                        <i class="bi bi-pencil"></i> Düzenle
-                                    </button>
                                 </div>
                                 <div class="card-body">
-                                    <form id="importProcessForm" class="d-none">
-                                        <div class="mb-3">
-                                            <label class="form-label">Dosya Yolu</label>
-                                            <input type="text" class="form-control" name="file_path" value="${importProcess.file_path || ''}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Sayfa Adı</label>
-                                            <input type="text" class="form-control" name="sheet_name" value="${importProcess.sheet_name || ''}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Hedef Tablo</label>
-                                            <input type="text" class="form-control" name="table_name" value="${importProcess.table_name || ''}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Import Modu</label>
-                                            <select class="form-select" name="import_mode" required>
-                                                <option value="append" ${importProcess.import_mode === 'append' ? 'selected' : ''}>Ekle</option>
-                                                <option value="replace" ${importProcess.import_mode === 'replace' ? 'selected' : ''}>Yeniden Oluştur</option>
-                                            </select>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Kolon Eşleştirmeleri</label>
-                                            <div id="columnMappings">
-                                                ${JSON.parse(importProcess.column_mappings || '[]').map((mapping, index) => `
-                                                    <div class="row mb-2">
-                                                        <div class="col">
-                                                            <input type="text" class="form-control" name="excel_columns[]" value="${mapping.excel_column || ''}" placeholder="Excel Kolonu" required>
-                                                        </div>
-                                                        <div class="col">
-                                                            <input type="text" class="form-control" name="oracle_columns[]" value="${mapping.oracle_column || ''}" placeholder="Oracle Kolonu" required>
-                                                        </div>
-                                                        <div class="col-auto">
-                                                            <button type="button" class="btn btn-sm btn-danger remove-mapping">
-                                                                <i class="bi bi-trash"></i>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                `).join('')}
-                                            </div>
-                                            <button type="button" class="btn btn-sm btn-secondary mt-2" id="addMapping">
-                                                <i class="bi bi-plus-lg"></i> Kolon Eşleştirmesi Ekle
-                                            </button>
-                                        </div>
-                                        <div class="d-flex justify-content-end gap-2">
-                                            <button type="button" class="btn btn-secondary cancel-edit">İptal</button>
-                                            <button type="submit" class="btn btn-primary">Kaydet</button>
-                                        </div>
-                                    </form>
-                                    <div id="importProcessView">
-                                        <div class="mb-3">
-                                            <label class="form-label">Dosya Yolu</label>
-                                            <input type="text" class="form-control" value="${importProcess.file_path || ''}" readonly>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Sayfa Adı</label>
-                                            <input type="text" class="form-control" value="${importProcess.sheet_name || ''}" readonly>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Hedef Tablo</label>
-                                            <input type="text" class="form-control" value="${importProcess.table_name || ''}" readonly>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Import Modu</label>
-                                            <input type="text" class="form-control" value="${importProcess.import_mode === 'append' ? 'Ekle' : 'Yeniden Oluştur'}" readonly>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Kolon Eşleştirmeleri</label>
-                                            <div class="table-responsive">
-                                                <table class="table table-sm">
-                                                    <thead>
+                                    <div class="mb-3">
+                                        <label class="form-label">Dosya Yolu</label>
+                                        <input type="text" class="form-control import-field" name="file_path" value="${importProcess.file_path || ''}" data-field="file_path">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Sayfa Adı</label>
+                                        <input type="text" class="form-control import-field" name="sheet_name" value="${importProcess.sheet_name || ''}" data-field="sheet_name">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Hedef Tablo</label>
+                                        <input type="text" class="form-control import-field" name="table_name" value="${importProcess.table_name || ''}" data-field="table_name">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Import Modu</label>
+                                        <select class="form-select import-field" name="import_mode" data-field="import_mode">
+                                            <option value="append" ${importProcess.import_mode === 'append' ? 'selected' : ''}>Ekle</option>
+                                            <option value="replace" ${importProcess.import_mode === 'replace' ? 'selected' : ''}>Yeniden Oluştur</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Kolon Eşleştirmeleri</label>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Excel Kolonu</th>
+                                                        <th>Oracle Kolonu</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="columnMappings">
+                                                    ${JSON.parse(importProcess.column_mappings || '[]').map((mapping, index) => `
                                                         <tr>
-                                                            <th>Excel Kolonu</th>
-                                                            <th>Oracle Kolonu</th>
+                                                            <td>
+                                                                <input type="text" class="form-control form-control-sm import-field" 
+                                                                    name="excel_columns[]" value="${mapping.excel_column || ''}" 
+                                                                    data-field="excel_column" data-index="${index}">
+                                                            </td>
+                                                            <td>
+                                                                <input type="text" class="form-control form-control-sm import-field" 
+                                                                    name="oracle_columns[]" value="${mapping.oracle_column || ''}" 
+                                                                    data-field="oracle_column" data-index="${index}">
+                                                            </td>
                                                         </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        ${JSON.parse(importProcess.column_mappings || '[]').map(mapping => `
-                                                            <tr>
-                                                                <td>${mapping.excel_column || ''}</td>
-                                                                <td>${mapping.oracle_column || ''}</td>
-                                                            </tr>
-                                                        `).join('')}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
                                         </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Son Kullanım</label>
-                                            <input type="text" class="form-control" value="${importProcess.last_used_at || 'Henüz kullanılmadı'}" readonly>
-                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Son Kullanım</label>
+                                        <input type="text" class="form-control" value="${importProcess.last_used_at || 'Henüz kullanılmadı'}" readonly>
                                     </div>
                                 </div>
                             </div>
                         `;
 
-                        // Düzenleme butonuna tıklandığında
-                        const editButton = variablesContainer.querySelector('.edit-import-process');
-                        const form = variablesContainer.querySelector('#importProcessForm');
-                        const view = variablesContainer.querySelector('#importProcessView');
-                        const cancelButton = variablesContainer.querySelector('.cancel-edit');
+                        // Modalın kaydet butonuna tıklandığında
+                        const saveButton = document.querySelector('#variablesModal .btn-primary');
+                        if (saveButton) {
+                            saveButton.addEventListener('click', async () => {
+                                const importFields = variablesContainer.querySelectorAll('.import-field');
+                                const data = {
+                                    file_path: '',
+                                    sheet_name: '',
+                                    table_name: '',
+                                    import_mode: '',
+                                    column_mappings: []
+                                };
 
-                        editButton.addEventListener('click', () => {
-                            form.classList.remove('d-none');
-                            view.classList.add('d-none');
-                            editButton.classList.add('d-none');
-                        });
-
-                        cancelButton.addEventListener('click', () => {
-                            form.classList.add('d-none');
-                            view.classList.remove('d-none');
-                            editButton.classList.remove('d-none');
-                        });
-
-                        // Kolon eşleştirmesi ekleme
-                        const addMappingButton = variablesContainer.querySelector('#addMapping');
-                        const columnMappings = variablesContainer.querySelector('#columnMappings');
-
-                        addMappingButton.addEventListener('click', () => {
-                            const mappingHtml = `
-                                <div class="row mb-2">
-                                    <div class="col">
-                                        <input type="text" class="form-control" name="excel_columns[]" placeholder="Excel Kolonu" required>
-                                    </div>
-                                    <div class="col">
-                                        <input type="text" class="form-control" name="oracle_columns[]" placeholder="Oracle Kolonu" required>
-                                    </div>
-                                    <div class="col-auto">
-                                        <button type="button" class="btn btn-sm btn-danger remove-mapping">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                            columnMappings.insertAdjacentHTML('beforeend', mappingHtml);
-                        });
-
-                        // Kolon eşleştirmesi silme
-                        columnMappings.addEventListener('click', (e) => {
-                            if (e.target.closest('.remove-mapping')) {
-                                e.target.closest('.row').remove();
-                            }
-                        });
-
-                        // Form gönderimi
-                        form.addEventListener('submit', async (e) => {
-                            e.preventDefault();
-                            const formData = new FormData(form);
-                            const data = {
-                                file_path: formData.get('file_path'),
-                                sheet_name: formData.get('sheet_name'),
-                                table_name: formData.get('table_name'),
-                                import_mode: formData.get('import_mode'),
-                                column_mappings: Array.from(formData.getAll('excel_columns')).map((excelCol, index) => ({
-                                    excel_column: excelCol,
-                                    oracle_column: formData.getAll('oracle_columns')[index]
-                                }))
-                            };
-
-                            try {
-                                const response = await fetch(`/step/${stepId}/import_process`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify(data)
+                                // Tüm alanları topla
+                                importFields.forEach(field => {
+                                    const fieldName = field.dataset.field;
+                                    if (fieldName === 'excel_column' || fieldName === 'oracle_column') {
+                                        const index = parseInt(field.dataset.index);
+                                        if (!data.column_mappings[index]) {
+                                            data.column_mappings[index] = {};
+                                        }
+                                        data.column_mappings[index][fieldName] = field.value;
+                                    } else {
+                                        data[fieldName] = field.value;
+                                    }
                                 });
 
-                                if (!response.ok) {
-                                    const errorData = await response.json();
-                                    throw new Error(errorData.error || 'Import process güncellenirken hata oluştu');
-                                }
+                                try {
+                                    const response = await fetch(`/step/${stepId}/import_process`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify(data)
+                                    });
 
-                                // Başarılı güncelleme sonrası sayfayı yenile
-                                window.location.reload();
-                            } catch (error) {
-                                alert(error.message);
-                            }
-                        });
+                                    if (!response.ok) {
+                                        const errorData = await response.json();
+                                        throw new Error(errorData.error || 'Import process güncellenirken hata oluştu');
+                                    }
+
+                                    // Başarılı güncelleme sonrası sayfayı yenile
+                                    window.location.reload();
+                                } catch (error) {
+                                    alert(error.message);
+                                }
+                            });
+                        }
                     })
                     .catch(error => {
                         console.error('Import process bilgisi alınırken hata oluştu:', error);
