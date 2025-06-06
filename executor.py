@@ -356,3 +356,85 @@ class ProcessExecutor:
                 'output': 'Bu adım tipi otomatik çalıştırılmaz',
                 'error': None
             } 
+
+    @staticmethod
+    def execute_import_process(import_process):
+        """Excel import process'ini çalıştırır"""
+        try:
+            print(f"[DEBUG] Excel dosyası okunuyor: {import_process.file_path}")
+            # Excel dosyasını oku
+            df = pd.read_excel(import_process.file_path, sheet_name=import_process.sheet_name)
+            print(f"[DEBUG] Excel dosyası okundu. Satır sayısı: {len(df)}")
+            
+            print("[DEBUG] Oracle bağlantısı oluşturuluyor...")
+            # Oracle bağlantısını oluştur
+            import oracledb
+            connection = oracledb.connect(
+                user=ProcessExecutor._oracle_config['username'],
+                password=ProcessExecutor._oracle_config['password'],
+                dsn=ProcessExecutor._oracle_config['dsn']
+            )
+            cursor = connection.cursor()
+            print("[DEBUG] Oracle bağlantısı başarılı")
+            
+            # Kolon eşleştirmelerini al
+            column_mappings = json.loads(import_process.column_mappings)
+            print(f"[DEBUG] Kolon eşleştirmeleri: {column_mappings}")
+            
+            # Verileri Oracle'a aktar
+            if import_process.import_mode == 'append':
+                print("[DEBUG] Append modu: Mevcut tabloya veri ekleniyor...")
+                # Mevcut tabloya ekle
+                columns = list(column_mappings.keys())
+                placeholders = [f":{i+1}" for i in range(len(columns))]
+                insert_sql = f"INSERT INTO {import_process.table_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+                print(f"[DEBUG] SQL: {insert_sql}")
+                
+                for _, row in df.iterrows():
+                    values = [row[column_mappings[col]] for col in columns]
+                    cursor.execute(insert_sql, values)
+            
+            elif import_process.import_mode == 'replace':
+                print("[DEBUG] Replace modu: Tablo yeniden oluşturuluyor...")
+                # Tabloyu temizle ve yeniden oluştur
+                cursor.execute(f"DROP TABLE {import_process.table_name}")
+                
+                # Yeni tablo oluştur
+                create_table_sql = f"CREATE TABLE {import_process.table_name} ("
+                for col in column_mappings.keys():
+                    create_table_sql += f"{col} VARCHAR2(4000), "
+                create_table_sql = create_table_sql.rstrip(", ") + ")"
+                print(f"[DEBUG] SQL: {create_table_sql}")
+                cursor.execute(create_table_sql)
+                
+                # Verileri ekle
+                columns = list(column_mappings.keys())
+                placeholders = [f":{i+1}" for i in range(len(columns))]
+                insert_sql = f"INSERT INTO {import_process.table_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+                print(f"[DEBUG] SQL: {insert_sql}")
+                
+                for _, row in df.iterrows():
+                    values = [row[column_mappings[col]] for col in columns]
+                    cursor.execute(insert_sql, values)
+            
+            print("[DEBUG] Değişiklikler kaydediliyor...")
+            connection.commit()
+            cursor.close()
+            connection.close()
+            print("[DEBUG] Oracle bağlantısı kapatıldı")
+            
+            # Son kullanım tarihini güncelle
+            import_process.last_used_at = datetime.now()
+            print("[DEBUG] Son kullanım tarihi güncellendi")
+            
+            return {
+                'status': 'success',
+                'message': 'Excel verisi başarıyla içe aktarıldı.'
+            }
+            
+        except Exception as e:
+            print(f"[DEBUG] Hata oluştu: {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Excel import sırasında hata oluştu: {str(e)}'
+            } 
