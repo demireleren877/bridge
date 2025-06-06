@@ -317,11 +317,36 @@ class ProcessExecutor:
 
             # Her komutu çalıştır
             results = []
+            output_data = None
+            output_columns = None
+
             for cmd in sql_commands:
                 try:
                     cursor.execute(cmd)
                     if cursor.rowcount > 0:
                         results.append(f"{cursor.rowcount} satır etkilendi")
+                    
+                    # Eğer SELECT veya WITH ile başlayan sorgu ise ve veri döndürüyorsa
+                    cmd_upper = cmd.strip().upper()
+                    if (cmd_upper.startswith('SELECT') or cmd_upper.startswith('WITH')) and cursor.description:
+                        output_columns = [col[0] for col in cursor.description]
+                        output_data = cursor.fetchall()
+                        
+                        # Excel dosyasını oluştur
+                        import pandas as pd
+                        from datetime import datetime
+                        
+                        # DataFrame oluştur
+                        df = pd.DataFrame(output_data, columns=output_columns)
+                        
+                        # Excel dosyasını kaydet
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        excel_filename = f"sql_output_{timestamp}.xlsx"
+                        excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
+                        df.to_excel(excel_path, index=False)
+                        
+                        results.append(f"Çıktı Excel dosyası olarak kaydedildi: {excel_filename}")
+                
                 except Exception as e:
                     results.append(f"Hata: {str(e)}")
 
@@ -333,7 +358,9 @@ class ProcessExecutor:
             return {
                 'status': 'success',
                 'message': 'SQL script başarıyla çalıştırıldı',
-                'output': '\n'.join(results)
+                'output': '\n'.join(results),
+                'has_excel_output': output_data is not None,
+                'excel_filename': excel_filename if output_data is not None else None
             }
 
         except Exception as e:

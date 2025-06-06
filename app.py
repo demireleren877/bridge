@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -2088,6 +2088,18 @@ def update_step_import_process(step_id):
         db.session.rollback()
         print(f"Import process güncellenirken hata oluştu: {str(e)}")
         return jsonify({'error': f'Import process güncellenirken hata oluştu: {str(e)}'}), 500
+
+@app.route('/download_excel/<filename>')
+def download_excel(filename):
+    """Excel dosyasını indir"""
+    try:
+        excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', filename)
+        return send_file(excel_path, as_attachment=True)
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Excel dosyası indirilirken hata oluştu: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     with app.app_context():
