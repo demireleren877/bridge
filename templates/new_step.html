@@ -62,11 +62,23 @@
                             </select>
                         </div>
                         <div class="mb-3" id="procedure-params-container" style="display: none;">
-                            <label for="procedure_params" class="form-label">Prosedür Parametreleri (JSON
-                                formatında)</label>
-                            <textarea class="form-control" id="procedure_params" name="procedure_params" rows="3"
-                                placeholder='["param1", "param2", ...]'></textarea>
-                            <small class="text-muted">Prosedür parametrelerini JSON array formatında giriniz</small>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="package_name" class="form-label">Paket</label>
+                                    <select class="form-select" id="package_name" name="package_name">
+                                        <option value="">Paket Seçin</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="procedure_name" class="form-label">Prosedür</label>
+                                    <select class="form-select" id="procedure_name" name="procedure_name">
+                                        <option value="">Prosedür Seçin</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="procedure_params" class="mt-3">
+                                <!-- Prosedür parametreleri buraya dinamik olarak eklenecek -->
+                            </div>
                         </div>
                         <div class="input-container">
                             <label for="responsible" class="form-label">Sorumlu</label>
@@ -133,6 +145,101 @@
             procedureParamsContainer.style.display = 'none';
             importProcessContainer.style.display = 'none';
         }
+    });
+
+    // Paketleri ve prosedürleri yükle
+    async function loadPackages() {
+        try {
+            const response = await fetch('/api/oracle/packages');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const packageSelect = document.getElementById('package_name');
+                packageSelect.innerHTML = '<option value="">Paket Seçin</option>';
+
+                for (const packageName in data.packages) {
+                    const option = document.createElement('option');
+                    option.value = packageName;
+                    option.textContent = packageName;
+                    packageSelect.appendChild(option);
+                }
+            }
+        } catch (error) {
+            console.error('Paketler yüklenirken hata oluştu:', error);
+        }
+    }
+
+    // Paket seçildiğinde prosedürleri yükle
+    document.getElementById('package_name').addEventListener('change', function () {
+        const packageName = this.value;
+        const procedureSelect = document.getElementById('procedure_name');
+        const paramsContainer = document.getElementById('procedure_params');
+
+        procedureSelect.innerHTML = '<option value="">Prosedür Seçin</option>';
+        paramsContainer.innerHTML = '';
+
+        if (packageName) {
+            fetch('/api/oracle/packages')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.packages[packageName]) {
+                        for (const procedureName in data.packages[packageName]) {
+                            const option = document.createElement('option');
+                            option.value = procedureName;
+                            option.textContent = procedureName;
+                            procedureSelect.appendChild(option);
+                        }
+                    }
+                })
+                .catch(error => console.error('Prosedürler yüklenirken hata oluştu:', error));
+        }
+    });
+
+    // Prosedür seçildiğinde parametreleri göster
+    document.getElementById('procedure_name').addEventListener('change', function () {
+        const packageName = document.getElementById('package_name').value;
+        const procedureName = this.value;
+        const paramsContainer = document.getElementById('procedure_params');
+
+        paramsContainer.innerHTML = '';
+
+        if (packageName && procedureName) {
+            fetch('/api/oracle/packages')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' &&
+                        data.packages[packageName] &&
+                        data.packages[packageName][procedureName]) {
+
+                        const params = data.packages[packageName][procedureName];
+
+                        params.forEach(param => {
+                            const paramDiv = document.createElement('div');
+                            paramDiv.className = 'mb-3';
+
+                            const label = document.createElement('label');
+                            label.className = 'form-label';
+                            label.textContent = `${param.name} (${param.type})`;
+
+                            const input = document.createElement('input');
+                            input.type = 'text';
+                            input.className = 'form-control';
+                            input.name = `param_${param.name}`;
+                            input.required = true;
+
+                            paramDiv.appendChild(label);
+                            paramDiv.appendChild(input);
+                            paramsContainer.appendChild(paramDiv);
+                        });
+                    }
+                })
+                .catch(error => console.error('Parametreler yüklenirken hata oluştu:', error));
+        }
+    });
+
+    // Sayfa yüklendiğinde paketleri yükle
+    document.addEventListener('DOMContentLoaded', function () {
+        loadPackages();
     });
 </script>
 {% endblock %}

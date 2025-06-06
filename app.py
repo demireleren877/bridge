@@ -414,52 +414,76 @@ def new_step(process_id):
     parent_step = Step.query.get(parent_id) if parent_id else None
     
     if request.method == 'POST':
-        name = request.form.get('name')
-        description = request.form.get('description')
-        step_type = request.form.get('type')
-        file_path = request.form.get('file_path')
-        procedure_params = request.form.get('procedure_params')
-        responsible = request.form.get('responsible')
-        import_process_id = request.form.get('import_process_id')
-        
         step = Step(
-            name=name,
-            description=description,
-            type=step_type,
-            file_path=file_path if step_type != 'excel_import' else None,
-            process_id=process_id,
+            name=request.form['name'],
+            description=request.form['description'],
+            type=request.form['type'],
+            file_path=request.form.get('file_path', ''),
+            order=request.form.get('order', 0),
             parent_id=parent_id,
-            responsible=responsible
+            process_id=process_id,
+            responsible=request.form.get('responsible', '')
         )
         
-        if step_type == 'sql_procedure' and procedure_params:
-            try:
-                params = json.loads(procedure_params)
-                step.procedure_params = json.dumps(params)
-            except json.JSONDecodeError:
-                flash('Prosedür parametreleri geçerli bir JSON formatında değil.', 'error')
-                return redirect(url_for('new_step', process_id=process_id, parent_id=parent_id))
-        
-        if step_type == 'excel_import' and import_process_id:
-            step.import_process_id = import_process_id
-        
         db.session.add(step)
-        db.session.commit()
+        db.session.flush()  # ID'yi almak için flush
         
+        # Eğer SQL prosedür tipi seçildiyse, parametreleri değişken olarak ekle
+        if step.type == 'sql_procedure':
+            package_name = request.form.get('package_name')
+            procedure_name = request.form.get('procedure_name')
+            
+            if package_name and procedure_name:
+                # Prosedür parametrelerini al
+                connection = oracledb.connect(
+                    user=app.config['ORACLE_USERNAME'],
+                    password=app.config['ORACLE_PASSWORD'],
+                    dsn=app.config['ORACLE_DSN']
+                )
+                cursor = connection.cursor()
+                
+                query = """
+                SELECT 
+                    argument_name,
+                    data_type,
+                    in_out
+                FROM 
+                    all_arguments
+                WHERE 
+                    object_name = :package_name
+                    AND procedure_name = :procedure_name
+                    AND owner = :owner
+                ORDER BY 
+                    position
+                """
+                
+                cursor.execute(query, {
+                    'package_name': package_name,
+                    'procedure_name': procedure_name,
+                    'owner': app.config['ORACLE_USERNAME'].upper()
+                })
+                
+                params = cursor.fetchall()
+                cursor.close()
+                connection.close()
+                
+                # Her parametre için değişken oluştur
+                for param in params:
+                    arg_name, data_type, in_out = param
+                    if arg_name:  # Eğer argüman adı varsa
+                        variable = StepVariable(
+                            step_id=step.id,
+                            name=arg_name,
+                            var_type='text',  # Varsayılan olarak text tipi
+                            default_value=request.form.get(f'param_{arg_name}', ''),
+                            scope='step_only'
+                        )
+                        db.session.add(variable)
+        
+        db.session.commit()
         return redirect(url_for('process_detail', process_id=process_id))
     
-    # Ana adımları al
-    main_steps = Step.query.filter_by(process_id=process_id, parent_id=None).order_by(Step.order).all()
-    
-    # Alt adımları al
-    substeps = []
-    for main_step in main_steps:
-        substeps.extend(get_substeps_recursive(main_step.id))
-    
-    # Tüm adımları birleştir
-    all_steps = main_steps + substeps
-    
-    # Import processlerini al
+    all_steps = Step.query.filter_by(process_id=process_id).all()
     import_processes = ImportProcess.query.order_by(ImportProcess.name).all()
     
     return render_template('new_step.html', 
@@ -471,55 +495,107 @@ def new_step(process_id):
 
 @app.route('/step/<int:step_id>/execute', methods=['POST'])
 def execute_step(step_id):
-    """Adımı çalıştırır"""
+    step = Step.query.get_or_404(step_id)
+    
+    if step.status == 'done':
+        return jsonify({'status': 'error', 'message': 'Bu adım zaten tamamlanmış.'})
+    
     try:
-        step = Step.query.get_or_404(step_id)
-        
-        # Adım tipine göre işlem yap
         if step.type == 'python_script':
             # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
             output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
+            print(f"[DEBUG] output_dir: {output_dir}")
             if output_dir:
                 ProcessExecutor._files_before = set(os.listdir(output_dir))
-            result = ProcessExecutor.execute_python_script(step, output_dir, step.variables)
+            return ProcessExecutor.execute_python_script(step.file_path, output_dir, step.variables)
         elif step.type == 'sql_script':
             result = ProcessExecutor.execute_sql_script(step)
+            if result.get('status') == 'success':
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                db.session.commit()
+                return jsonify(result)
+            else:
+                return jsonify(result)
         elif step.type == 'sql_procedure':
-            result = ProcessExecutor.execute_sql_script(step)
-        elif step.type == 'mail':
-            result = ProcessExecutor.execute_mail(step)
+            try:
+                # Oracle bağlantısını oluştur
+                connection = oracledb.connect(
+                    user=app.config['ORACLE_USERNAME'],
+                    password=app.config['ORACLE_PASSWORD'],
+                    dsn=app.config['ORACLE_DSN']
+                )
+                cursor = connection.cursor()
+                
+                # Prosedür adını ve paket adını al
+                package_name = step.file_path.split('.')[0]  # file_path formatı: "PACKAGE_NAME.PROCEDURE_NAME"
+                procedure_name = step.file_path.split('.')[1]
+                
+                # Değişkenlerden parametre değerlerini al
+                params = {}
+                for var in step.variables:
+                    params[var.name] = var.default_value
+                
+                # Prosedürü çağır
+                cursor.callproc(f"{package_name}.{procedure_name}", list(params.values()))
+                
+                # Değişiklikleri kaydet
+                connection.commit()
+                cursor.close()
+                connection.close()
+                
+                # Adımın durumunu güncelle
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                db.session.commit()
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Prosedür başarıyla çalıştırıldı'
+                })
+                
+            except Exception as e:
+                # Hata durumunda adımın durumunu güncelle
+                step.status = 'failed'
+                step.error_message = str(e)
+                db.session.commit()
+                
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Prosedür çalıştırılırken hata oluştu: {str(e)}'
+                })
         elif step.type == 'excel_import':
-            result = ProcessExecutor.execute_import_process(step.import_process)
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': f'Desteklenmeyen adım tipi: {step.type}'
-            }), 400
-
-        # Sonucu kontrol et
-        if result.get('status') == 'success':
-            # Adımı tamamlandı olarak işaretle
-            step.completed = True
-            step.completed_at = datetime.now()
-            db.session.commit()
+            if not step.import_process_id:
+                return jsonify({'status': 'error', 'message': 'Import process seçilmemiş.'})
             
-            return jsonify({
-                'status': 'success',
-                'message': result.get('message', 'İşlem başarıyla tamamlandı'),
-                'has_excel_output': result.get('has_excel_output', False),
-                'excel_filename': result.get('excel_filename')
-            })
+            import_process = ImportProcess.query.get(step.import_process_id)
+            if not import_process:
+                return jsonify({'status': 'error', 'message': 'Seçilen import process bulunamadı.'})
+            
+            # Import process'i çalıştır
+            result = ProcessExecutor.execute_import_process(import_process)
+            
+            if result.get('status') == 'success':
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                db.session.commit()
+                return jsonify({'status': 'success', 'message': 'Excel import başarıyla tamamlandı.'})
+            else:
+                return jsonify({'status': 'error', 'message': result.get('message', 'Excel import sırasında bir hata oluştu.')})
         else:
-            return jsonify({
-                'status': 'error',
-                'message': result.get('message', 'İşlem başarısız oldu')
-            }), 500
-
+            # Diğer adım tipleri için mevcut işlemleri yap
+            result = ProcessExecutor.execute_step(step.type, step.file_path, output_dir=None, variables=step.variables)
+            
+            if result.get('success'):
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                db.session.commit()
+                return jsonify({'status': 'success', 'message': 'Adım başarıyla tamamlandı.'})
+            else:
+                return jsonify({'status': 'error', 'message': result.get('error', 'Adım çalıştırılırken bir hata oluştu.')})
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Adım çalıştırılırken hata oluştu: {str(e)}'
-        }), 500
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/step/<int:step_id>/variables/new', methods=['GET', 'POST'])
 def new_variable(step_id):
@@ -2102,6 +2178,67 @@ def download_excel(filename):
             'status': 'error',
             'message': f'Excel dosyası indirilirken hata oluştu: {str(e)}'
         }), 500
+
+@app.route('/api/oracle/packages')
+def get_oracle_packages():
+    try:
+        connection = oracledb.connect(
+            user=app.config['ORACLE_USERNAME'],
+            password=app.config['ORACLE_PASSWORD'],
+            dsn=app.config['ORACLE_DSN']
+        )
+        cursor = connection.cursor()
+        
+        # Paketleri ve prosedürleri al
+        query = """
+        SELECT 
+            p.object_name as package_name,
+            pp.procedure_name,
+            pp.argument_name,
+            pp.data_type,
+            pp.in_out
+        FROM 
+            all_procedures p
+            JOIN all_arguments pp ON p.object_name = pp.object_name 
+            AND p.owner = pp.owner
+        WHERE 
+            p.object_type = 'PACKAGE'
+            AND p.owner = :owner
+        ORDER BY 
+            p.object_name, pp.procedure_name, pp.position
+        """
+        
+        cursor.execute(query, owner=app.config['ORACLE_USERNAME'].upper())
+        results = cursor.fetchall()
+        
+        # Sonuçları düzenle
+        packages = {}
+        for row in results:
+            package_name, procedure_name, arg_name, data_type, in_out = row
+            if package_name not in packages:
+                packages[package_name] = {}
+            if procedure_name not in packages[package_name]:
+                packages[package_name][procedure_name] = []
+            if arg_name:  # Eğer argüman varsa
+                packages[package_name][procedure_name].append({
+                    'name': arg_name,
+                    'type': data_type,
+                    'in_out': in_out
+                })
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'status': 'success',
+            'packages': packages
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
 
 if __name__ == '__main__':
     with app.app_context():
