@@ -2042,6 +2042,44 @@ def get_step_import_process(step_id):
         print(f"Import process bilgisi alınırken hata oluştu: {str(e)}")
         return jsonify({'error': f'Import process bilgisi alınırken hata oluştu: {str(e)}'}), 500
 
+@app.route('/step/<int:step_id>/import_process', methods=['POST'])
+def update_step_import_process(step_id):
+    """Adıma ait import process bilgilerini günceller"""
+    try:
+        step = Step.query.get_or_404(step_id)
+        if step.type != 'excel_import':
+            return jsonify({'error': 'Bu adım bir Excel import adımı değil'}), 400
+            
+        if not step.import_process_id:
+            return jsonify({'error': 'Bu adım için import process tanımlanmamış'}), 404
+            
+        import_process = ImportProcess.query.get(step.import_process_id)
+        if not import_process:
+            return jsonify({'error': 'Import process bulunamadı'}), 404
+            
+        data = request.get_json()
+        
+        # Gerekli alanları kontrol et
+        required_fields = ['file_path', 'sheet_name', 'table_name', 'import_mode', 'column_mappings']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Eksik alan: {field}'}), 400
+        
+        # Import process'i güncelle
+        import_process.file_path = data['file_path']
+        import_process.sheet_name = data['sheet_name']
+        import_process.table_name = data['table_name']
+        import_process.import_mode = data['import_mode']
+        import_process.column_mappings = json.dumps(data['column_mappings'])
+        
+        db.session.commit()
+        
+        return jsonify({'message': 'Import process başarıyla güncellendi'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Import process güncellenirken hata oluştu: {str(e)}")
+        return jsonify({'error': f'Import process güncellenirken hata oluştu: {str(e)}'}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         # Sadece tabloları oluştur, silme işlemini kaldır
