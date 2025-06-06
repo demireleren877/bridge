@@ -1,496 +1,847 @@
 {% extends "base.html" %}
 
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-md-8 offset-md-2">
-            <div class="card theme-card">
-                <div class="card-header theme-header py-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0 theme-text">Excel'den Oracle'a Veri Aktarımı</h4>
-                        <div>
-                            <button type="button" class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal"
-                                data-bs-target="#savedProcessesModal">
-                                <i class="fas fa-folder-open"></i> Kayıtlı İşlemler
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-success" id="saveCurrentProcess">
-                                <i class="fas fa-save"></i> Bu İşlemi Kaydet
-                            </button>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <div class="card shadow-lg border-0 theme-card">
+                <div class="card theme-card">
+                    <div class="card-header theme-header py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0 theme-text">Excel'den Oracle'a Veri Aktarımı</h4>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal"
+                                    data-bs-target="#savedProcessesModal">
+                                    <i class="bi bi-folder2-open"></i> Kayıtlı İşlemler
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-success" id="saveCurrentProcess">
+                                    <i class="bi bi-save"></i> Bu İşlemi Kaydet
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="card-body theme-body">
-                    <form id="excelImportForm" enctype="multipart/form-data" novalidate>
-                        <!-- Dosya Seçimi -->
-                        <div class="mb-4">
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="step-number me-3">1</div>
-                                <h5 class="mb-0 theme-text">Dosya Seçimi</h5>
-                            </div>
-                            <div class="ps-5">
-                                <div class="d-flex gap-4 mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="fileInputMode"
-                                            id="fileSelectMode" value="select" checked>
-                                        <label class="form-check-label theme-text" for="fileSelectMode">Dosya
-                                            Seç</label>
+                    <div class="card-body theme-body">
+                        <form id="excelImportForm" enctype="multipart/form-data" novalidate>
+                            <!-- Dosya Seçimi -->
+                            <div class="mb-4">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="step-number me-3">1</div>
+                                    <h5 class="mb-0 theme-text">Dosya Seçimi</h5>
+                                </div>
+                                <div class="ps-5">
+                                    <div class="d-flex gap-4 mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="fileInputMode"
+                                                id="fileSelectMode" value="select" checked>
+                                            <label class="form-check-label theme-text" for="fileSelectMode">Dosya
+                                                Seç</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="fileInputMode"
+                                                id="filePathMode" value="path">
+                                            <label class="form-check-label theme-text" for="filePathMode">Dosya Yolu
+                                                Gir</label>
+                                        </div>
                                     </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="fileInputMode"
-                                            id="filePathMode" value="path">
-                                        <label class="form-check-label theme-text" for="filePathMode">Dosya Yolu
-                                            Gir</label>
+                                    <div id="fileSelectSection">
+                                        <input type="file" class="form-control theme-input" id="excelFile"
+                                            accept=".xlsx,.xls">
+                                    </div>
+                                    <div id="filePathSection" class="mt-2" style="display: none;">
+                                        <input type="text" class="form-control theme-input" id="excelFilePath"
+                                            placeholder="Excel dosyasının tam yolunu girin">
+                                    </div>
+                                    <div class="mt-3">
+                                        <label for="sheetSelect" class="form-label theme-text">Excel Sayfası</label>
+                                        <select class="form-select theme-input" id="sheetSelect" disabled>
+                                            <option value="">Önce Excel dosyası seçin</option>
+                                        </select>
                                     </div>
                                 </div>
-
-                                <div id="fileSelectSection">
-                                    <input type="file" class="form-control theme-input" id="excelFile"
-                                        accept=".xlsx,.xls">
-                                </div>
-
-                                <div id="filePathSection" class="mt-2" style="display: none;">
-                                    <input type="text" class="form-control theme-input" id="excelFilePath"
-                                        placeholder="Excel dosyasının tam yolunu girin">
-                                </div>
-
-                                <div class="mt-3">
-                                    <label for="sheetSelect" class="form-label theme-text">Excel Sayfası</label>
-                                    <select class="form-select theme-input" id="sheetSelect" disabled>
-                                        <option value="">Önce Excel dosyası seçin</option>
-                                    </select>
-                                </div>
                             </div>
-                        </div>
-
-                        <!-- Tablo Seçimi -->
-                        <div class="mb-4">
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="step-number me-3">2</div>
-                                <h5 class="mb-0 theme-text">Tablo Seçimi</h5>
-                            </div>
-                            <div class="ps-5">
-                                <div class="form-check mb-3">
-                                    <input class="form-check-input" type="checkbox" id="createNewTable">
-                                    <label class="form-check-label theme-text" for="createNewTable">Yeni Tablo
-                                        Oluştur</label>
+                            <!-- Tablo Seçimi -->
+                            <div class="mb-4">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="step-number me-3">2</div>
+                                    <h5 class="mb-0 theme-text">Tablo Seçimi</h5>
                                 </div>
-
-                                <div id="existingTableSection">
-                                    <label for="tableSelect" class="form-label theme-text">Hedef Oracle Tablosu</label>
-                                    <select class="form-select theme-input mb-3" id="tableSelect">
-                                        <option value="">Yükleniyor...</option>
-                                    </select>
-
-                                    <div class="card theme-subcard">
-                                        <div class="card-body">
-                                            <label class="form-label theme-text">İçe Aktarma Modu</label>
-                                            <div class="d-flex gap-4">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="importMode"
-                                                        id="appendMode" value="append" checked>
-                                                    <label class="form-check-label theme-text" for="appendMode">Mevcut
-                                                        verilere ekle</label>
-                                                </div>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="importMode"
-                                                        id="replaceMode" value="replace">
-                                                    <label class="form-check-label theme-text" for="replaceMode">Mevcut
-                                                        verileri değiştir</label>
+                                <div class="ps-5">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="createNewTable">
+                                        <label class="form-check-label theme-text" for="createNewTable">Yeni Tablo
+                                            Oluştur</label>
+                                    </div>
+                                    <div id="existingTableSection">
+                                        <label for="tableSelect" class="form-label theme-text">Hedef Oracle
+                                            Tablosu</label>
+                                        <select class="form-select theme-input mb-3" id="tableSelect">
+                                            <option value="">Yükleniyor...</option>
+                                        </select>
+                                        <div class="card theme-subcard mb-3">
+                                            <div class="card-body">
+                                                <label class="form-label theme-text">İçe Aktarma Modu</label>
+                                                <div class="d-flex gap-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="importMode"
+                                                            id="appendMode" value="append" checked>
+                                                        <label class="form-check-label theme-text"
+                                                            for="appendMode">Mevcut
+                                                            verilere ekle</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="importMode"
+                                                            id="replaceMode" value="replace">
+                                                        <label class="form-check-label theme-text"
+                                                            for="replaceMode">Mevcut
+                                                            verileri değiştir</label>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div id="newTableSection" style="display: none;">
-                                    <label for="newTableName" class="form-label theme-text">Yeni Tablo Adı</label>
-                                    <input type="text" class="form-control theme-input" id="newTableName"
-                                        placeholder="Yeni tablo adını girin">
-                                    <div class="form-text theme-text-secondary">Tablo adı sadece harf, rakam ve alt
-                                        çizgi içerebilir.</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Sütun Eşleştirme -->
-                        <div class="mb-4">
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="step-number me-3">3</div>
-                                <h5 class="mb-0 theme-text">Sütun Eşleştirme</h5>
-                            </div>
-                            <div class="ps-5">
-                                <div class="table-responsive">
-                                    <table class="table table-sm theme-table">
-                                        <thead>
-                                            <tr id="columnMappingHeader"></tr>
-                                        </thead>
-                                        <tbody id="columnMappingBody"></tbody>
-                                    </table>
-                                </div>
-                                <div class="alert theme-alert mt-3">
-                                    <small><i class="fas fa-info-circle"></i> Excel sütun isimleri otomatik olarak
-                                        Oracle
-                                        uyumlu formata dönüştürülür.</small>
+                                    <div id="newTableSection" style="display: none;">
+                                        <label for="newTableName" class="form-label theme-text">Yeni Tablo Adı</label>
+                                        <input type="text" class="form-control theme-input" id="newTableName"
+                                            placeholder="Yeni tablo adını girin">
+                                        <div class="form-text theme-text-secondary">Tablo adı sadece harf, rakam ve alt
+                                            çizgi içerebilir.</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="alert alert-danger" id="errorAlert" style="display: none;"></div>
-                        <div class="alert alert-success" id="successAlert" style="display: none;"></div>
-
-                        <div class="d-flex justify-content-end mt-4">
-                            <button type="submit" class="btn btn-primary px-4">
-                                <i class="fas fa-file-import"></i> İçe Aktarmayı Başlat
-                            </button>
-                        </div>
-                    </form>
+                            <!-- Sütun Eşleştirme -->
+                            <div class="mb-5" id="columnMappingSection">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="step-number me-3">3</div>
+                                    <h5 class="mb-0 theme-text">Sütun Eşleştirme</h5>
+                                </div>
+                                <div class="ps-5">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm theme-table align-middle">
+                                            <thead>
+                                                <tr id="columnMappingHeader"></tr>
+                                            </thead>
+                                            <tbody id="columnMappingBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <div class="alert theme-alert mt-3">
+                                        <small><i class="bi bi-info-circle"></i> Excel sütun isimleri otomatik olarak
+                                            Oracle uyumlu formata dönüştürülür.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="alert alert-danger" id="errorAlert" style="display: none;"></div>
+                            <div class="alert alert-success" id="successAlert" style="display: none;"></div>
+                            <div class="d-flex justify-content-end mt-4">
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <span class="spinner-border spinner-border-sm d-none" role="status"
+                                        aria-hidden="true"></span>
+                                    <i class="bi bi-file-earmark-arrow-up"></i> İçe Aktarmayı Başlat
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Kayıtlı İşlemler Modal -->
-<div class="modal fade" id="savedProcessesModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content theme-modal">
-            <div class="modal-header theme-border">
-                <h5 class="modal-title theme-text">Kayıtlı İşlemler</h5>
-                <button type="button" class="btn-close theme-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="table-responsive">
-                    <table class="table table-hover theme-table">
-                        <thead>
-                            <tr>
-                                <th>İşlem Adı</th>
-                                <th>Dosya Yolu</th>
-                                <th>Hedef Tablo</th>
-                                <th>Son Kullanım</th>
-                                <th>İşlemler</th>
-                            </tr>
-                        </thead>
-                        <tbody id="savedProcessesList"></tbody>
-                    </table>
+    <!-- Kayıtlı İşlemler Modalı -->
+    <div class="modal fade" id="savedProcessesModal" tabindex="-1" aria-labelledby="savedProcessesModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content theme-card">
+                <div class="modal-header theme-header">
+                    <h5 class="modal-title theme-text" id="savedProcessesModalLabel">
+                        <i class="bi bi-clock-history me-2"></i>Kayıtlı İşlemler
+                    </h5>
+                    <button type="button" class="btn-close theme-close" data-bs-dismiss="modal"
+                        aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body theme-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover theme-table align-middle">
+                            <thead>
+                                <tr>
+                                    <th class="theme-text">İsim</th>
+                                    <th class="theme-text">Dosya</th>
+                                    <th class="theme-text">Tablo</th>
+                                    <th class="theme-text">Son Kullanım</th>
+                                    <th class="theme-text text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="savedProcessesList">
+                                <!-- JS ile doldurulacak -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- İşlem Kaydetme Modal -->
-<div class="modal fade" id="saveProcessModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content theme-modal">
-            <div class="modal-header theme-border">
-                <h5 class="modal-title theme-text">İşlemi Kaydet</h5>
-                <button type="button" class="btn-close theme-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="processName" class="form-label theme-text">İşlem Adı</label>
-                    <input type="text" class="form-control theme-input" id="processName"
-                        placeholder="İşlem için bir isim girin">
+    <!-- İşlemi Kaydet Modalı -->
+    <div class="modal fade" id="saveProcessModal" tabindex="-1" aria-labelledby="saveProcessModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content theme-card">
+                <div class="modal-header theme-header">
+                    <h5 class="modal-title theme-text" id="saveProcessModalLabel">
+                        <i class="bi bi-save me-2"></i>İşlemi Kaydet
+                    </h5>
+                    <button type="button" class="btn-close theme-close" data-bs-dismiss="modal"
+                        aria-label="Kapat"></button>
                 </div>
-            </div>
-            <div class="modal-footer theme-border">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                <button type="button" class="btn btn-primary" id="saveProcessButton">Kaydet</button>
+                <div class="modal-body theme-body">
+                    <div class="mb-3">
+                        <label for="processName" class="form-label theme-text">İşlem Adı</label>
+                        <input type="text" class="form-control theme-input" id="processName"
+                            placeholder="İşlem adını girin">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="saveProcessButton">
+                        <i class="bi bi-save me-1"></i>Kaydet
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<style>
-    /* Tema Değişkenleri */
-    :root {
-        /* Light tema */
-        --light-bg: #ffffff;
-        --light-card-bg: #ffffff;
-        --light-header-bg: #ffffff;
-        --light-text: #212529;
-        --light-text-secondary: #6c757d;
-        --light-border: #dee2e6;
-        --light-input-bg: #ffffff;
-        --light-input-border: #ced4da;
-        --light-table-bg: #ffffff;
-        --light-table-border: #dee2e6;
-        --light-alert-bg: #e7f5ff;
-        --light-alert-text: #0c5460;
-        --light-step-bg: #e9ecef;
-        --light-step-text: #495057;
-        --light-shadow: rgba(0, 0, 0, 0.05);
-    }
-
-    [data-bs-theme="dark"] {
-        /* Dark tema */
-        --light-bg: #212529;
-        --light-card-bg: #212529;
-        --light-header-bg: #212529;
-        --light-text: #ffffff;
-        --light-text-secondary: #adb5bd;
-        --light-border: #495057;
-        --light-input-bg: #2c3034;
-        --light-input-border: #495057;
-        --light-table-bg: #2c3034;
-        --light-table-border: #495057;
-        --light-alert-bg: #343a40;
-        --light-alert-text: #adb5bd;
-        --light-step-bg: #343a40;
-        --light-step-text: #adb5bd;
-        --light-shadow: rgba(0, 0, 0, 0.2);
-    }
-
-    /* Tema Sınıfları */
-    .theme-card {
-        border: none;
-        box-shadow: 0 0 20px var(--light-shadow);
-        border-radius: 10px;
-        background-color: var(--light-card-bg);
-    }
-
-    .theme-header {
-        background-color: var(--light-header-bg);
-        border-bottom: 1px solid var(--light-border);
-    }
-
-    .theme-body {
-        background-color: var(--light-card-bg);
-    }
-
-    .theme-text {
-        color: var(--light-text);
-    }
-
-    .theme-text-secondary {
-        color: var(--light-text-secondary);
-    }
-
-    .theme-border {
-        border-color: var(--light-border);
-    }
-
-    .theme-input {
-        background-color: var(--light-input-bg);
-        border-color: var(--light-input-border);
-        color: var(--light-text);
-    }
-
-    .theme-input:focus {
-        background-color: var(--light-input-bg);
-        border-color: #0d6efd;
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, .25);
-    }
-
-    .theme-input::placeholder {
-        color: var(--light-text-secondary);
-    }
-
-    .theme-table {
-        background-color: var(--light-table-bg);
-        color: var(--light-text);
-    }
-
-    .theme-table th {
-        background-color: var(--light-header-bg);
-        border-color: var(--light-table-border);
-    }
-
-    .theme-table td {
-        border-color: var(--light-table-border);
-    }
-
-    .theme-alert {
-        background-color: var(--light-alert-bg);
-        color: var(--light-alert-text);
-        border: none;
-        border-radius: 6px;
-    }
-
-    .theme-modal {
-        background-color: var(--light-card-bg);
-        border-color: var(--light-border);
-    }
-
-    .theme-close {
-        filter: var(--light-text) brightness(0) invert(1);
-    }
-
-    .theme-subcard {
-        background-color: var(--light-header-bg);
-        border-color: var(--light-border);
-    }
-
-    .step-number {
-        width: 32px;
-        height: 32px;
-        background-color: var(--light-step-bg);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 600;
-        color: var(--light-step-text);
-    }
-
-    .form-label {
-        font-weight: 500;
-    }
-
-    .btn-primary {
-        background-color: #0d6efd;
-        border-color: #0d6efd;
-        font-weight: 500;
-    }
-
-    .btn-primary:hover {
-        background-color: #0b5ed7;
-        border-color: #0a58ca;
-    }
-</style>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Form elemanları
-        const form = document.getElementById('excelImportForm');
-        const fileInput = document.getElementById('excelFile');
-        const filePathInput = document.getElementById('excelFilePath');
-        const sheetSelect = document.getElementById('sheetSelect');
-        const tableSelect = document.getElementById('tableSelect');
-        const createNewTableCheckbox = document.getElementById('createNewTable');
-        const existingTableSection = document.getElementById('existingTableSection');
-        const newTableSection = document.getElementById('newTableSection');
-        const newTableNameInput = document.getElementById('newTableName');
-        const columnMappingBody = document.getElementById('columnMappingBody');
-        const errorAlert = document.getElementById('errorAlert');
-        const successAlert = document.getElementById('successAlert');
-
-        let excelColumns = [];
-        let oracleColumns = [];
-        let columnTypes = {};
-
-        function showError(message) {
-            errorAlert.textContent = message;
-            errorAlert.style.display = 'block';
-            successAlert.style.display = 'none';
+    <style>
+        /* Tema Değişkenleri */
+        :root {
+            /* Light tema */
+            --light-bg: #ffffff;
+            --light-card-bg: #ffffff;
+            --light-header-bg: #ffffff;
+            --light-text: #212529;
+            --light-text-secondary: #6c757d;
+            --light-border: #dee2e6;
+            --light-input-bg: #ffffff;
+            --light-input-border: #ced4da;
+            --light-table-bg: #ffffff;
+            --light-table-border: #dee2e6;
+            --light-alert-bg: #e7f5ff;
+            --light-alert-text: #0c5460;
+            --light-step-bg: #e9ecef;
+            --light-step-text: #495057;
+            --light-shadow: rgba(0, 0, 0, 0.05);
+            --light-modal-bg: #ffffff;
+            --light-modal-header-bg: #f8f9fa;
+            --light-modal-border: #dee2e6;
         }
 
-        function showSuccess(message) {
-            successAlert.textContent = message;
-            successAlert.style.display = 'block';
-            errorAlert.style.display = 'none';
+        [data-bs-theme="dark"] {
+            /* Dark tema */
+            --light-bg: #212529;
+            --light-card-bg: #212529;
+            --light-header-bg: #212529;
+            --light-text: #ffffff;
+            --light-text-secondary: #adb5bd;
+            --light-border: #495057;
+            --light-input-bg: #2c3034;
+            --light-input-border: #495057;
+            --light-table-bg: #2c3034;
+            --light-table-border: #495057;
+            --light-alert-bg: #343a40;
+            --light-alert-text: #adb5bd;
+            --light-step-bg: #343a40;
+            --light-step-text: #adb5bd;
+            --light-shadow: rgba(0, 0, 0, 0.2);
+            --light-modal-bg: #212529;
+            --light-modal-header-bg: #343a40;
+            --light-modal-border: #495057;
         }
 
-        // Dosya seçim modu değişikliği
-        document.querySelectorAll('input[name="fileInputMode"]').forEach(radio => {
-            radio.addEventListener('change', function () {
-                const fileSelectSection = document.getElementById('fileSelectSection');
-                const filePathSection = document.getElementById('filePathSection');
+        /* Tema Sınıfları */
+        .theme-card {
+            border: none;
+            box-shadow: 0 0 20px var(--light-shadow);
+            border-radius: 10px;
+            background-color: var(--light-card-bg);
+        }
 
-                if (this.value === 'select') {
-                    fileSelectSection.style.display = 'block';
-                    filePathSection.style.display = 'none';
-                } else {
-                    fileSelectSection.style.display = 'none';
-                    filePathSection.style.display = 'block';
-                }
-            });
-        });
+        .theme-header {
+            background-color: var(--light-header-bg);
+            border-bottom: 1px solid var(--light-border);
+        }
 
-        // Yeni/Mevcut tablo seçimi
-        createNewTableCheckbox.addEventListener('change', function () {
-            existingTableSection.style.display = this.checked ? 'none' : 'block';
-            newTableSection.style.display = this.checked ? 'block' : 'none';
-        });
+        .theme-body {
+            background-color: var(--light-card-bg);
+        }
 
-        // Excel dosyası seçildiğinde veya dosya yolu girildiğinde
-        function handleFileInput() {
-            const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
-            const formData = new FormData();
+        .theme-text {
+            color: var(--light-text);
+        }
 
-            if (fileInputMode === 'select' && fileInput.files.length > 0) {
-                formData.append('file', fileInput.files[0]);
-                formData.append('file_input_mode', 'select');
-            } else if (fileInputMode === 'path') {
-                const filePath = filePathInput.value.trim();
-                if (filePath) {
-                    formData.append('file_path', filePath);
-                    formData.append('file_input_mode', 'path');
-                } else {
-                    return;
-                }
-            } else {
-                return;
-            }
+        .theme-text-secondary {
+            color: var(--light-text-secondary);
+        }
 
-            fetch('/api/excel/sheets', {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        sheetSelect.innerHTML = '<option value="">Sayfa seçin</option>' +
-                            data.sheets.map(sheet => `<option value="${sheet}">${sheet}</option>`).join('');
-                        sheetSelect.disabled = false;
+        .theme-border {
+            border-color: var(--light-border);
+        }
+
+        .theme-input {
+            background-color: var(--light-input-bg);
+            border-color: var(--light-input-border);
+            color: var(--light-text);
+        }
+
+        .theme-input:focus {
+            background-color: var(--light-input-bg);
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, .25);
+        }
+
+        .theme-input::placeholder {
+            color: var(--light-text-secondary);
+        }
+
+        .theme-table {
+            background-color: var(--light-table-bg);
+            color: var(--light-text);
+        }
+
+        .theme-table th {
+            background-color: var(--light-header-bg);
+            border-color: var(--light-table-border);
+        }
+
+        .theme-table td {
+            border-color: var(--light-table-border);
+        }
+
+        .theme-alert {
+            background-color: var(--light-alert-bg);
+            color: var(--light-alert-text);
+            border: none;
+            border-radius: 6px;
+        }
+
+        .theme-modal {
+            background-color: var(--light-modal-bg);
+            border-color: var(--light-modal-border);
+        }
+
+        .theme-modal .modal-header {
+            background-color: var(--light-modal-header-bg);
+            border-bottom-color: var(--light-modal-border);
+        }
+
+        .theme-modal .modal-body {
+            background-color: var(--light-modal-bg);
+        }
+
+        .theme-modal .table {
+            color: var(--light-text);
+        }
+
+        .theme-modal .table th {
+            background-color: var(--light-modal-header-bg);
+            border-bottom-color: var(--light-modal-border);
+        }
+
+        .theme-modal .table td {
+            border-color: var(--light-modal-border);
+        }
+
+        .theme-modal .btn-close {
+            filter: var(--light-text) brightness(0) invert(1);
+        }
+
+        .theme-modal .btn-outline-primary {
+            color: var(--light-text);
+            border-color: var(--light-border);
+        }
+
+        .theme-modal .btn-outline-primary:hover {
+            background-color: var(--light-modal-header-bg);
+            border-color: var(--light-border);
+        }
+
+        .theme-modal .btn-outline-danger {
+            color: var(--light-text);
+            border-color: var(--light-border);
+        }
+
+        .theme-modal .btn-outline-danger:hover {
+            background-color: var(--light-modal-header-bg);
+            border-color: var(--light-border);
+        }
+
+        .theme-close {
+            filter: var(--light-text) brightness(0) invert(1);
+        }
+
+        .theme-subcard {
+            background-color: var(--light-header-bg);
+            border-color: var(--light-border);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background-color: var(--light-step-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: var(--light-step-text);
+        }
+
+        .form-label {
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            font-weight: 500;
+        }
+
+        .btn-primary:hover {
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+        }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('excelImportForm');
+            const fileInput = document.getElementById('excelFile');
+            const sheetSelect = document.getElementById('sheetSelect');
+            const tableSelect = document.getElementById('tableSelect');
+            const createNewTableCheckbox = document.getElementById('createNewTable');
+            const existingTableSection = document.getElementById('existingTableSection');
+            const newTableSection = document.getElementById('newTableSection');
+            const newTableNameInput = document.getElementById('newTableName');
+            const columnMappingSection = document.getElementById('columnMappingSection');
+            const columnMappingBody = document.getElementById('columnMappingBody');
+            const errorAlert = document.getElementById('errorAlert');
+            const successAlert = document.getElementById('successAlert');
+            const importButton = form.querySelector('button[type="submit"]');
+
+            let excelColumns = [];
+            let oracleColumns = [];
+            let columnTypes = {};
+
+            // Excel dosyası seçildiğinde veya dosya yolu girildiğinde
+            function handleFileInput() {
+                const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
+                const formData = new FormData();
+
+                if (fileInputMode === 'select' && fileInput.files.length > 0) {
+                    formData.append('file', fileInput.files[0]);
+                    formData.append('file_input_mode', 'select');
+                } else if (fileInputMode === 'path') {
+                    const filePath = document.getElementById('excelFilePath').value.trim();
+                    if (filePath) {
+                        formData.append('file_path', filePath);
+                        formData.append('file_input_mode', 'path');
                     } else {
-                        showError('Sayfalar yüklenirken hata oluştu: ' + data.error);
+                        return;
                     }
-                })
-                .catch(error => {
-                    showError('Sayfalar yüklenirken hata oluştu: ' + error);
-                });
-        }
-
-        // Excel sayfası seçildiğinde sütun bilgilerini al
-        function loadSheetColumns() {
-            const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
-            const formData = new FormData();
-
-            if (fileInputMode === 'select' && fileInput.files.length > 0) {
-                formData.append('file', fileInput.files[0]);
-                formData.append('file_input_mode', 'select');
-            } else if (fileInputMode === 'path') {
-                const filePath = filePathInput.value.trim();
-                if (filePath) {
-                    formData.append('file_path', filePath);
-                    formData.append('file_input_mode', 'path');
                 } else {
                     return;
                 }
-            }
 
-            formData.append('sheet_name', sheetSelect.value);
-
-            fetch('/api/excel/columns', {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        excelColumns = data.columns;
-                        columnTypes = data.column_types;
-                        if (!createNewTableCheckbox.checked && tableSelect.value) {
-                            updateColumnMapping();
+                fetch('/api/excel/sheets', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            sheetSelect.innerHTML = '<option value="">Sayfa seçin</option>' +
+                                data.sheets.map(sheet => `<option value="${sheet}">${sheet}</option>`).join('');
+                            sheetSelect.disabled = false;
+                            checkImportButtonState();
+                        } else {
+                            showError('Sayfalar yüklenirken hata oluştu: ' + data.error);
                         }
-                    } else {
-                        showError('Sütun bilgileri alınırken hata oluştu: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    showError('Sütun bilgileri alınırken hata oluştu: ' + error);
-                });
-        }
+                    })
+                    .catch(error => {
+                        showError('Sayfalar yüklenirken hata oluştu: ' + error);
+                    });
+            }
 
-        // Oracle tablolarını yükle
-        function loadOracleTables() {
+            // Dosya seçim modu değiştiğinde
+            document.querySelectorAll('input[name="fileInputMode"]').forEach(radio => {
+                radio.addEventListener('change', function () {
+                    const fileSelectSection = document.getElementById('fileSelectSection');
+                    const filePathSection = document.getElementById('filePathSection');
+
+                    if (this.value === 'select') {
+                        fileSelectSection.style.display = 'block';
+                        filePathSection.style.display = 'none';
+                        // Dosya yolu inputunu temizle
+                        document.getElementById('excelFilePath').value = '';
+                    } else {
+                        fileSelectSection.style.display = 'none';
+                        filePathSection.style.display = 'block';
+                        // Dosya seçimini temizle
+                        fileInput.value = '';
+                    }
+
+                    // Sayfa seçimini sıfırla
+                    sheetSelect.innerHTML = '<option value="">Önce Excel dosyası seçin</option>';
+                    sheetSelect.disabled = true;
+                    columnMappingSection.style.display = 'none';
+                    checkImportButtonState();
+                });
+            });
+
+            // Dosya seçildiğinde veya dosya yolu değiştiğinde
+            fileInput.addEventListener('change', handleFileInput);
+            document.getElementById('excelFilePath').addEventListener('input', debounce(handleFileInput, 500));
+
+            // Debounce fonksiyonu
+            function debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            // Excel sayfası seçildiğinde sütun bilgilerini al
+            sheetSelect.addEventListener('change', function () {
+                const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
+                const formData = new FormData();
+
+                if (fileInputMode === 'select' && fileInput.files.length > 0) {
+                    formData.append('file', fileInput.files[0]);
+                    formData.append('file_input_mode', 'select');
+                } else if (fileInputMode === 'path') {
+                    const filePath = document.getElementById('excelFilePath').value.trim();
+                    if (!filePath) {
+                        return;
+                    }
+                    formData.append('file_path', filePath);
+                    formData.append('file_input_mode', 'path');
+                } else {
+                    return;
+                }
+
+                if (this.value) {
+                    formData.append('sheet_name', this.value);
+
+                    fetch('/api/excel/columns', {
+                        method: 'POST',
+                        body: formData
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                excelColumns = data.columns;
+                                columnTypes = data.column_types;
+                                // Sütun eşleştirme tablosunu göster
+                                if (columnMappingSection) {
+                                    columnMappingSection.style.display = 'block';
+                                }
+
+                                // Eğer tablo seçiliyse sütun eşleştirmesini güncelle
+                                if (!createNewTableCheckbox.checked && tableSelect.value) {
+                                    updateColumnMapping();
+                                }
+                            } else {
+                                showError('Sütun bilgileri alınırken hata oluştu: ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            showError('Sütun bilgileri alınırken hata oluştu: ' + error);
+                        });
+                }
+
+                checkImportButtonState();
+            });
+
+            // Yeni tablo oluşturma seçeneği değiştiğinde
+            createNewTableCheckbox.addEventListener('change', function () {
+                if (this.checked) {
+                    existingTableSection.style.display = 'none';
+                    newTableSection.style.display = 'block';
+                    tableSelect.disabled = true;
+                    newTableNameInput.disabled = false;
+                    // Sütun eşleştirme tablosunu göster
+                    if (excelColumns.length > 0) {
+                        updateColumnMapping();
+                    }
+                } else {
+                    existingTableSection.style.display = 'block';
+                    newTableSection.style.display = 'none';
+                    tableSelect.disabled = false;
+                    newTableNameInput.disabled = true;
+                    // Sütun eşleştirme tablosunu gizle
+                    columnMappingSection.style.display = 'none';
+                }
+                checkImportButtonState();
+            });
+
+            // Oracle tablosu seçildiğinde sütun bilgilerini al
+            tableSelect.addEventListener('change', function () {
+                if (this.value) {
+                    fetch(`/api/oracle/columns/${this.value}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                oracleColumns = data.columns;
+                                // Sütun eşleştirme tablosunu göster
+                                if (excelColumns.length > 0) {
+                                    updateColumnMapping();
+                                }
+                            } else {
+                                showError('Oracle sütun bilgileri alınırken hata oluştu: ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            showError('Oracle sütun bilgileri alınırken hata oluştu: ' + error);
+                        });
+                } else {
+                    // Tablo seçimi kaldırıldığında sütun eşleştirme tablosunu gizle
+                    columnMappingSection.style.display = 'none';
+                }
+                checkImportButtonState();
+            });
+
+            // Veri tipi seçeneklerini güncelle
+            function getDataTypeOptions() {
+                return `
+            <optgroup label="Sayısal Tipler">
+                <option value="NUMBER">NUMBER</option>
+                <option value="INTEGER">INTEGER</option>
+                <option value="FLOAT">FLOAT</option>
+                <option value="DECIMAL">DECIMAL</option>
+            </optgroup>
+            <optgroup label="Karakter Tipleri">
+                <option value="NVARCHAR2(255)">NVARCHAR2(255)</option>
+                <option value="NVARCHAR2(500)">NVARCHAR2(500)</option>
+                <option value="NVARCHAR2(1000)">NVARCHAR2(1000)</option>
+                <option value="NCHAR(1)">NCHAR(1)</option>
+                <option value="NCHAR(10)">NCHAR(10)</option>
+                <option value="NCLOB">NCLOB</option>
+            </optgroup>
+            <optgroup label="Tarih Tipleri">
+                <option value="DATE">DATE</option>
+                <option value="TIMESTAMP">TIMESTAMP</option>
+            </optgroup>
+        `;
+            }
+
+            // Sütun eşleştirme arayüzünü güncelle
+            function updateColumnMapping() {
+                if (excelColumns.length > 0) {
+                    columnMappingSection.style.display = 'block';
+                    columnMappingBody.innerHTML = '';
+
+                    // Tablo başlıklarını güncelle
+                    const headerRow = document.getElementById('columnMappingHeader');
+                    if (createNewTableCheckbox.checked) {
+                        headerRow.innerHTML = `
+                    <th>Excel Sütunu</th>
+                    <th>Önerilen Oracle Sütunu</th>
+                    <th>Veri Tipi</th>
+                    <th>İşlem</th>
+                `;
+                    } else {
+                        headerRow.innerHTML = `
+                    <th>Excel Sütunu</th>
+                    <th>Eşleşen Oracle Sütunu</th>
+                    <th>Veri Tipi</th>
+                    <th>İşlem</th>
+                `;
+                    }
+
+                    excelColumns.forEach((col, index) => {
+                        const oracleCol = convertToOracleColumnName(col);
+                        const row = document.createElement('tr');
+
+                        // Excel sütun adı
+                        const excelCell = document.createElement('td');
+                        excelCell.textContent = col;
+
+                        // Oracle sütun seçimi
+                        const oracleCell = document.createElement('td');
+                        if (createNewTableCheckbox.checked) {
+                            // Yeni tablo için önerilen ismi göster
+                            oracleCell.textContent = oracleCol;
+                        } else {
+                            // Mevcut tablo için eşleşme kontrolü
+                            const matchingColumn = oracleColumns.find(oc => oc.name === oracleCol);
+                            if (matchingColumn) {
+                                // Eşleşme varsa sütun adını göster
+                                oracleCell.textContent = oracleCol;
+                            } else {
+                                // Eşleşme yoksa dropdown göster
+                                const oracleSelect = document.createElement('select');
+                                oracleSelect.className = 'form-select form-select-sm';
+                                oracleSelect.innerHTML = '<option value="">Sütun seçin</option>';
+
+                                // Oracle sütunlarını ekle
+                                oracleColumns.forEach(oc => {
+                                    const option = document.createElement('option');
+                                    option.value = oc.name;
+                                    option.textContent = oc.name;
+                                    oracleSelect.appendChild(option);
+                                });
+                                oracleCell.appendChild(oracleSelect);
+                            }
+                        }
+
+                        // Veri tipi seçimi
+                        const typeCell = document.createElement('td');
+                        const typeSelect = document.createElement('select');
+                        typeSelect.className = 'form-select form-select-sm';
+                        typeSelect.innerHTML = getDataTypeOptions();
+
+                        // Excel veri tipine göre varsayılan seçimi ayarla
+                        const dataType = columnTypes[col]?.toLowerCase() || '';
+                        if (dataType.includes('number') || dataType.includes('int')) {
+                            typeSelect.value = 'NUMBER';
+                        } else if (dataType.includes('date')) {
+                            typeSelect.value = 'DATE';
+                        } else {
+                            typeSelect.value = 'NVARCHAR2(255)';
+                        }
+
+                        typeCell.appendChild(typeSelect);
+
+                        // İşlem butonları
+                        const actionCell = document.createElement('td');
+                        const includeCheckbox = document.createElement('input');
+                        includeCheckbox.type = 'checkbox';
+                        includeCheckbox.className = 'form-check-input';
+                        includeCheckbox.checked = true;
+                        includeCheckbox.title = 'Bu sütunu dahil et';
+                        actionCell.appendChild(includeCheckbox);
+
+                        row.appendChild(excelCell);
+                        row.appendChild(oracleCell);
+                        row.appendChild(typeCell);
+                        row.appendChild(actionCell);
+
+                        columnMappingBody.appendChild(row);
+                    });
+                }
+            }
+
+            // Excel sütun adını Oracle formatına dönüştür
+            function convertToOracleColumnName(name) {
+                // Türkçe karakter dönüşümü
+                const trChars = {
+                    'ı': 'I', 'ğ': 'G', 'ü': 'U', 'ş': 'S', 'ö': 'O', 'ç': 'C',
+                    'İ': 'I', 'Ğ': 'G', 'Ü': 'U', 'Ş': 'S', 'Ö': 'O', 'Ç': 'C',
+                    'i': 'I', 'g': 'G', 'u': 'U', 's': 'S', 'o': 'O', 'c': 'C'
+                };
+
+                let column = String(name);
+
+                // Türkçe karakterleri değiştir
+                for (const [trChar, engChar] of Object.entries(trChars)) {
+                    column = column.replace(new RegExp(trChar, 'g'), engChar);
+                }
+
+                // Boşlukları ve özel karakterleri alt çizgi ile değiştir
+                column = column.replace(/[^a-zA-Z0-9]/g, '_');
+
+                // Birden fazla alt çizgiyi tek alt çizgiye dönüştür
+                column = column.replace(/_+/g, '_');
+
+                // Başındaki ve sonundaki alt çizgileri kaldır
+                column = column.replace(/^_+|_+$/g, '');
+
+                // Tüm harfleri büyük yap
+                column = column.toUpperCase();
+
+                // Oracle'da geçerli bir sütun ismi oluştur
+                if (!column) {
+                    column = 'COLUMN_' + Math.abs(hashCode(name) % 10000);
+                } else if (/^\d/.test(column)) {
+                    column = 'COLUMN_' + column;
+                }
+
+                return column;
+            }
+
+            // String hash fonksiyonu
+            function hashCode(str) {
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const char = str.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return hash;
+            }
+
+            // İçe aktar butonunun durumunu kontrol eden fonksiyon
+            function checkImportButtonState() {
+                const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
+                const hasFile = fileInputMode === 'select' ? fileInput.files.length > 0 :
+                    document.getElementById('excelFilePath').value.trim() !== '';
+                const hasSheet = sheetSelect.value !== '';
+                const isNewTable = createNewTableCheckbox.checked;
+                const hasTable = isNewTable ?
+                    newTableNameInput.value.trim() !== '' :
+                    tableSelect.value !== '';
+
+                // Sütun eşleştirmelerini kontrol et
+                let hasValidColumnMappings = true;
+                if (!isNewTable && columnMappingBody.children.length > 0) {
+                    const rows = columnMappingBody.getElementsByTagName('tr');
+                    for (const row of rows) {
+                        const includeCheckbox = row.cells[3].querySelector('input[type="checkbox"]');
+                        if (includeCheckbox.checked) {
+                            const oracleCell = row.cells[1];
+                            if (oracleCell.querySelector('select')) {
+                                const oracleSelect = oracleCell.querySelector('select');
+                                if (!oracleSelect.value) {
+                                    hasValidColumnMappings = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Yeni tablo oluşturma modunda ve sütunlar yüklenmişse geçerli kabul et
+                if (isNewTable && columnMappingBody.children.length > 0) {
+                    hasValidColumnMappings = true;
+                }
+
+                importButton.disabled = !(hasFile && hasSheet && hasTable && hasValidColumnMappings);
+
+                // Debug için konsola yazdır
+                console.log('Button State Check:', {
+                    hasFile,
+                    hasSheet,
+                    hasTable,
+                    isNewTable,
+                    hasValidColumnMappings,
+                    disabled: importButton.disabled
+                });
+            }
+
+            // Yeni tablo adı değiştiğinde buton durumunu kontrol et
+            newTableNameInput.addEventListener('input', checkImportButtonState);
+
+            // Oracle tablolarını yükle
             fetch('/api/oracle/tables')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         tableSelect.innerHTML = '<option value="">Tablo seçin</option>' +
                             data.tables.map(table => `<option value="${table}">${table}</option>`).join('');
+                        checkImportButtonState();
                     } else {
                         showError('Tablolar yüklenirken hata oluştu: ' + data.error);
                     }
@@ -498,201 +849,358 @@
                 .catch(error => {
                     showError('Tablolar yüklenirken hata oluştu: ' + error);
                 });
-        }
 
-        // Oracle sütunlarını yükle
-        function loadOracleColumns(tableName) {
-            fetch(`/api/oracle/columns/${tableName}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        oracleColumns = data.columns;
-                        if (excelColumns.length > 0) {
-                            updateColumnMapping();
+            // Form gönderildiğinde
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
+                const formData = new FormData();
+
+                // Dosya veya dosya yolu kontrolü
+                if (fileInputMode === 'select' && !fileInput.files.length) {
+                    showError('Lütfen Excel dosyası seçin');
+                    return;
+                } else if (fileInputMode === 'path' && !document.getElementById('excelFilePath').value.trim()) {
+                    showError('Lütfen Excel dosyasının yolunu girin');
+                    return;
+                }
+
+                if (!sheetSelect.value) {
+                    showError('Lütfen Excel sayfası seçin');
+                    return;
+                }
+
+                // Dosya yolu veya seçilen dosyayı formData'ya ekle
+                if (fileInputMode === 'select') {
+                    formData.append('file', fileInput.files[0]);
+                    formData.append('file_input_mode', 'select');
+                } else {
+                    formData.append('file_path', document.getElementById('excelFilePath').value.trim());
+                    formData.append('file_input_mode', 'path');
+                }
+
+                formData.append('sheet_name', sheetSelect.value);
+
+                // Sütun eşleştirme bilgilerini topla
+                const columnMappings = [];
+                const rows = columnMappingBody.getElementsByTagName('tr');
+                for (const row of rows) {
+                    const includeCheckbox = row.cells[3].querySelector('input[type="checkbox"]');
+                    if (includeCheckbox.checked) {
+                        const excelCol = row.cells[0].textContent;
+                        let oracleCol, oracleType;
+
+                        if (createNewTableCheckbox.checked) {
+                            // Yeni tablo için önerilen sütun adını kullan
+                            oracleCol = row.cells[1].textContent;
+                            oracleType = row.cells[2].querySelector('select').value;
+                        } else {
+                            // Mevcut tablo için seçilen veya eşleşen sütun adını kullan
+                            const oracleCell = row.cells[1];
+                            if (oracleCell.querySelector('select')) {
+                                const oracleSelect = oracleCell.querySelector('select');
+                                if (!oracleSelect.value) {
+                                    showError(`Lütfen "${excelCol}" sütunu için bir Oracle sütunu seçin`);
+                                    return;
+                                }
+                                oracleCol = oracleSelect.value;
+                            } else {
+                                oracleCol = oracleCell.textContent;
+                            }
+                            oracleType = row.cells[2].querySelector('select').value;
                         }
-                    } else {
-                        showError('Oracle sütun bilgileri alınırken hata oluştu: ' + data.error);
+
+                        columnMappings.push({
+                            excel_column: excelCol,
+                            oracle_column: oracleCol,
+                            oracle_type: oracleType,
+                            handle_null: true // Boş hücreleri işle
+                        });
+
+                        // Debug için konsola yazdır
+                        console.log(`Excel: ${excelCol} -> Oracle: ${oracleCol} (${oracleType})`);
                     }
-                })
-                .catch(error => {
-                    showError('Oracle sütun bilgileri alınırken hata oluştu: ' + error);
-                });
-        }
+                }
 
-        // Sütun eşleştirme arayüzünü güncelle
-        function updateColumnMapping() {
-            const columnMappingBody = document.getElementById('columnMappingBody');
-            columnMappingBody.innerHTML = '';
+                formData.append('column_mappings', JSON.stringify(columnMappings));
 
-            excelColumns.forEach(excelCol => {
-                const row = document.createElement('tr');
-
-                // Excel sütunu
-                const excelCell = document.createElement('td');
-                excelCell.textContent = excelCol;
-                row.appendChild(excelCell);
-
-                // Oracle sütunu
-                const oracleCell = document.createElement('td');
                 if (createNewTableCheckbox.checked) {
-                    oracleCell.textContent = convertToOracleColumnName(excelCol);
+                    const newTableName = newTableNameInput.value.trim();
+                    if (!newTableName) {
+                        showError('Lütfen yeni tablo adını girin');
+                        return;
+                    }
+                    formData.append('create_new_table', 'true');
+                    formData.append('new_table_name', newTableName);
                 } else {
-                    const select = document.createElement('select');
-                    select.className = 'form-select form-select-sm';
-                    select.innerHTML = '<option value="">Sütun seçin</option>' +
-                        oracleColumns.map(col => `<option value="${col.name}">${col.name}</option>`).join('');
-                    oracleCell.appendChild(select);
-                }
-                row.appendChild(oracleCell);
-
-                // Veri tipi
-                const typeCell = document.createElement('td');
-                const typeSelect = document.createElement('select');
-                typeSelect.className = 'form-select form-select-sm';
-                typeSelect.innerHTML = getDataTypeOptions();
-
-                // Varsayılan veri tipini seç
-                const dataType = columnTypes[excelCol]?.toLowerCase() || '';
-                if (dataType.includes('int') || dataType.includes('float')) {
-                    typeSelect.value = 'NUMBER';
-                } else if (dataType.includes('date')) {
-                    typeSelect.value = 'DATE';
-                } else {
-                    typeSelect.value = 'NVARCHAR2(255)';
+                    if (!tableSelect.value) {
+                        showError('Lütfen hedef tabloyu seçin');
+                        return;
+                    }
+                    formData.append('table_name', tableSelect.value);
+                    // İçe aktarma modunu ekle
+                    const importMode = document.querySelector('input[name="importMode"]:checked').value;
+                    formData.append('import_mode', importMode);
                 }
 
-                typeCell.appendChild(typeSelect);
-                row.appendChild(typeCell);
+                if (importButton) {
+                    importButton.disabled = true;
+                    const spinner = importButton.querySelector('.spinner-border');
+                    if (spinner) {
+                        spinner.classList.remove('d-none');
+                    }
+                }
 
-                columnMappingBody.appendChild(row);
+                fetch('/api/excel/import', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            let message = data.message;
+                            if (data.column_mapping) {
+                                message += '<br><br>Sütun Eşleştirmeleri:<br>';
+                                for (const [excel, oracle] of Object.entries(data.column_mapping)) {
+                                    message += `${excel} → ${oracle}<br>`;
+                                }
+                            }
+                            showSuccess(message);
+                            // Form alanlarını sıfırla
+                            fileInput.value = '';
+                            sheetSelect.innerHTML = '<option value="">Önce Excel dosyası seçin</option>';
+                            sheetSelect.disabled = true;
+                            newTableNameInput.value = '';
+                            if (columnMappingSection) {
+                                columnMappingSection.style.display = 'none';
+                            }
+                            if (importButton) {
+                                importButton.disabled = true;
+                            }
+                            // Başarı mesajını 5 saniye sonra gizle
+                            setTimeout(() => {
+                                if (successAlert) {
+                                    successAlert.style.display = 'none';
+                                }
+                            }, 5000);
+                        } else {
+                            showError(data.error);
+                        }
+                    })
+                    .catch(error => {
+                        showError('İçe aktarma sırasında hata oluştu: ' + error);
+                    })
+                    .finally(() => {
+                        if (importButton) {
+                            importButton.disabled = false;
+                            const spinner = importButton.querySelector('.spinner-border');
+                            if (spinner) {
+                                spinner.classList.add('d-none');
+                            }
+                        }
+                    });
             });
-        }
 
-        // Veri tipi seçeneklerini oluştur
-        function getDataTypeOptions() {
-            return `
-                <option value="NUMBER">NUMBER</option>
-                <option value="INTEGER">INTEGER</option>
-                <option value="FLOAT">FLOAT</option>
-                <option value="NVARCHAR2(255)">NVARCHAR2(255)</option>
-                <option value="NVARCHAR2(1000)">NVARCHAR2(1000)</option>
-                <option value="DATE">DATE</option>
-                <option value="TIMESTAMP">TIMESTAMP</option>
-            `;
-        }
+            function showError(message) {
+                errorAlert.textContent = message;
+                errorAlert.style.display = 'block';
+                successAlert.style.display = 'none';
+            }
 
-        // Excel sütun adını Oracle formatına dönüştür
-        function convertToOracleColumnName(name) {
-            const trChars = {
-                'ı': 'I', 'ğ': 'G', 'ü': 'U', 'ş': 'S', 'ö': 'O', 'ç': 'C',
-                'İ': 'I', 'Ğ': 'G', 'Ü': 'U', 'Ş': 'S', 'Ö': 'O', 'Ç': 'C'
+            function showSuccess(message) {
+                successAlert.innerHTML = message;
+                successAlert.style.display = 'block';
+                errorAlert.style.display = 'none';
+            }
+
+            // Kayıtlı işlemleri yükle
+            function loadSavedProcesses() {
+                fetch('/api/import-processes')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const tbody = document.getElementById('savedProcessesList');
+                            tbody.innerHTML = '';
+
+                            data.processes.forEach(process => {
+                                // Dosya yolunu kısalt
+                                const shortPath = process.file_path.length > 50
+                                    ? process.file_path.substring(0, 25) + '...' + process.file_path.substring(process.file_path.length - 25)
+                                    : process.file_path;
+
+                                const row = document.createElement('tr');
+                                row.innerHTML = `
+                            <td class="theme-text">${process.name}</td>
+                            <td class="theme-text text-truncate" style="max-width: 200px;" data-bs-toggle="tooltip" title="${process.file_path}">
+                                ${shortPath}
+                            </td>
+                            <td class="theme-text">${process.table_name}</td>
+                            <td class="theme-text">${process.last_used_at ? new Date(process.last_used_at).toLocaleString() : '-'}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary me-1" onclick="loadProcess(${process.id})" title="Çalıştır">
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteProcess(${process.id})" title="Sil">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        `;
+                                tbody.appendChild(row);
+                            });
+
+                            // Tooltip'leri etkinleştir
+                            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                                return new bootstrap.Tooltip(tooltipTriggerEl);
+                            });
+                        } else {
+                            showError('Kayıtlı işlemler yüklenirken hata oluştu: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        showError('Kayıtlı işlemler yüklenirken hata oluştu: ' + error);
+                    });
+            }
+
+            // İşlem silme
+            window.deleteProcess = function (processId) {
+                if (confirm('Bu işlemi silmek istediğinizden emin misiniz?')) {
+                    fetch(`/api/import-processes/${processId}`, {
+                        method: 'DELETE'
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                showSuccess('İşlem başarıyla silindi');
+                                loadSavedProcesses();
+                            } else {
+                                showError('İşlem silinirken hata oluştu: ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            showError('İşlem silinirken hata oluştu: ' + error);
+                        });
+                }
             };
 
-            let column = String(name);
+            // İşlem yükleme ve çalıştırma
+            window.loadProcess = function (processId) {
+                fetch(`/api/import-processes/${processId}/execute`, {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showSuccess(data.message);
+                            loadSavedProcesses();
+                            bootstrap.Modal.getInstance(document.getElementById('savedProcessesModal')).hide();
+                        } else {
+                            showError('İşlem çalıştırılırken hata oluştu: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        showError('İşlem çalıştırılırken hata oluştu: ' + error);
+                    });
+            };
 
-            // Türkçe karakterleri değiştir
-            Object.entries(trChars).forEach(([tr, en]) => {
-                column = column.replace(new RegExp(tr, 'g'), en);
+            // Mevcut işlemi kaydetme
+            document.getElementById('saveCurrentProcess').addEventListener('click', function () {
+                // Form verilerini kontrol et
+                const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
+                const filePath = fileInputMode === 'select' ?
+                    (fileInput.files[0]?.name || '') :
+                    document.getElementById('excelFilePath').value.trim();
+
+                if (!filePath || !sheetSelect.value) {
+                    showError('Lütfen önce dosya ve sayfa seçin');
+                    return;
+                }
+
+                // Kaydetme modalını göster
+                const saveModal = new bootstrap.Modal(document.getElementById('saveProcessModal'));
+                saveModal.show();
             });
 
-            // Özel karakterleri temizle
-            column = column.replace(/[^a-zA-Z0-9]/g, '_')
-                .replace(/_+/g, '_')
-                .replace(/^_|_$/g, '')
-                .toUpperCase();
+            // İşlem kaydetme
+            document.getElementById('saveProcessButton').addEventListener('click', function () {
+                const processName = document.getElementById('processName').value.trim();
+                if (!processName) {
+                    showError('Lütfen işlem adı girin');
+                    return;
+                }
 
-            // Sayı ile başlıyorsa prefix ekle
-            if (/^\d/.test(column)) {
-                column = 'COL_' + column;
-            }
+                const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
+                const filePath = fileInputMode === 'select' ?
+                    (fileInput.files[0]?.name || '') :
+                    document.getElementById('excelFilePath').value.trim();
 
-            return column;
-        }
+                // Sütun eşleştirmelerini topla
+                const columnMappings = [];
+                const rows = columnMappingBody.getElementsByTagName('tr');
+                for (const row of rows) {
+                    const includeCheckbox = row.cells[3].querySelector('input[type="checkbox"]');
+                    if (includeCheckbox.checked) {
+                        const excelCol = row.cells[0].textContent;
+                        let oracleCol, oracleType;
 
-        // Event Listeners
-        fileInput.addEventListener('change', handleFileInput);
-        filePathInput.addEventListener('input', handleFileInput);
-        sheetSelect.addEventListener('change', loadSheetColumns);
-        tableSelect.addEventListener('change', function () {
-            if (this.value) {
-                loadOracleColumns(this.value);
-            }
-        });
+                        if (createNewTableCheckbox.checked) {
+                            oracleCol = row.cells[1].textContent;
+                            oracleType = row.cells[2].querySelector('select').value;
+                        } else {
+                            const oracleCell = row.cells[1];
+                            if (oracleCell.querySelector('select')) {
+                                oracleCol = oracleCell.querySelector('select').value;
+                            } else {
+                                oracleCol = oracleCell.textContent;
+                            }
+                            oracleType = row.cells[2].querySelector('select').value;
+                        }
 
-        // Form gönderimi
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-
-            const formData = new FormData();
-            const fileInputMode = document.querySelector('input[name="fileInputMode"]:checked').value;
-
-            // Dosya bilgilerini ekle
-            if (fileInputMode === 'select') {
-                formData.append('file', fileInput.files[0]);
-                formData.append('file_input_mode', 'select');
-            } else {
-                formData.append('file_path', filePathInput.value.trim());
-                formData.append('file_input_mode', 'path');
-            }
-
-            // Sayfa ve tablo bilgilerini ekle
-            formData.append('sheet_name', sheetSelect.value);
-            formData.append('create_new_table', createNewTableCheckbox.checked);
-
-            if (createNewTableCheckbox.checked) {
-                formData.append('new_table_name', newTableNameInput.value.trim());
-            } else {
-                formData.append('table_name', tableSelect.value);
-                formData.append('import_mode', document.querySelector('input[name="importMode"]:checked').value);
-            }
-
-            // Sütun eşleştirmelerini ekle
-            const mappings = [];
-            document.querySelectorAll('#columnMappingBody tr').forEach(row => {
-                const excelCol = row.cells[0].textContent;
-                const oracleCol = createNewTableCheckbox.checked ?
-                    row.cells[1].textContent :
-                    row.cells[1].querySelector('select').value;
-                const dataType = row.cells[2].querySelector('select').value;
-
-                mappings.push({
-                    excel_column: excelCol,
-                    oracle_column: oracleCol,
-                    oracle_type: dataType
-                });
-            });
-            formData.append('column_mappings', JSON.stringify(mappings));
-
-            // İçe aktarma işlemini başlat
-            const submitButton = form.querySelector('button[type="submit"]');
-            submitButton.disabled = true;
-
-            fetch('/api/excel/import', {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showSuccess(data.message);
-                        // Formu sıfırla
-                        form.reset();
-                        sheetSelect.innerHTML = '<option value="">Önce Excel dosyası seçin</option>';
-                        sheetSelect.disabled = true;
-                    } else {
-                        showError(data.error);
+                        columnMappings.push({
+                            excel_column: excelCol,
+                            oracle_column: oracleCol,
+                            oracle_type: oracleType
+                        });
                     }
-                })
-                .catch(error => {
-                    showError('İçe aktarma sırasında hata oluştu: ' + error);
-                })
-                .finally(() => {
-                    submitButton.disabled = false;
-                });
-        });
+                }
 
-        // Başlangıç işlemleri
-        loadOracleTables();
-    });
-</script>
-{% endblock %}
+                const processData = {
+                    name: processName,
+                    file_path: filePath,
+                    sheet_name: sheetSelect.value,
+                    create_new_table: createNewTableCheckbox.checked,
+                    table_name: createNewTableCheckbox.checked ?
+                        newTableNameInput.value.trim() :
+                        tableSelect.value,
+                    column_mappings: columnMappings,
+                    import_mode: document.querySelector('input[name="importMode"]:checked').value
+                };
+
+                fetch('/api/import-processes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(processData)
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showSuccess('İşlem başarıyla kaydedildi');
+                            bootstrap.Modal.getInstance(document.getElementById('saveProcessModal')).hide();
+                            document.getElementById('processName').value = '';
+                        } else {
+                            showError('İşlem kaydedilirken hata oluştu: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        showError('İşlem kaydedilirken hata oluştu: ' + error);
+                    });
+            });
+
+            // Kayıtlı işlemler modalı açıldığında işlemleri yükle
+            document.getElementById('savedProcessesModal').addEventListener('show.bs.modal', loadSavedProcesses);
+        });
+    </script>
+    {% endblock %}

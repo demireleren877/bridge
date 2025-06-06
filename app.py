@@ -149,6 +149,7 @@ class Step(db.Model):
     status = db.Column(db.String(20), default='not_started')
     version = db.Column(db.Integer, nullable=False, default=1)
     deadline = db.Column(db.DateTime, nullable=True)
+    import_process_id = db.Column(db.Integer, db.ForeignKey('import_process.id', ondelete='SET NULL'), nullable=True)
     dependencies = db.relationship('StepDependency', 
                                  foreign_keys='StepDependency.step_id',
                                  backref='dependent_step', 
@@ -408,84 +409,108 @@ def delete_process(process_id):
 
 @app.route('/process/<int:process_id>/step/new', methods=['GET', 'POST'])
 def new_step(process_id):
-    process = Process.query.get_or_404(process_id)    
-    if process.is_started:
-        flash('Başlatılmış süreçlere yeni adım eklenemez.', 'error')
-        return redirect(url_for('process_detail', process_id=process_id))    
-    parent_id = request.args.get('parent_id', type=int)    
+    process = Process.query.get_or_404(process_id)
+    parent_id = request.args.get('parent_id', type=int)
+    parent_step = Step.query.get(parent_id) if parent_id else None
+    
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
         step_type = request.form.get('type')
         file_path = request.form.get('file_path')
-        responsible = request.form.get('responsible')        
-        if name and step_type:
+        procedure_params = request.form.get('procedure_params')
+        responsible = request.form.get('responsible')
+        import_process_id = request.form.get('import_process_id')
+        
+        step = Step(
+            name=name,
+            description=description,
+            type=step_type,
+            file_path=file_path if step_type != 'excel_import' else None,
+            process_id=process_id,
+            parent_id=parent_id,
+            responsible=responsible
+        )
+        
+        if step_type == 'sql_procedure' and procedure_params:
             try:
-                # Ana adım tipi seçildiyse file_path ve procedure_params alanlarını temizle
-                if step_type == 'main_step':
-                    file_path = None
-                
-                step = Step(
-                    name=name,
-                    description=description,
-                    type=step_type,
-                    file_path=file_path,
-                    responsible=responsible,
-                    parent_id=parent_id,
-                    process_id=process_id
-                )
-                db.session.add(step)
-                db.session.commit()                
-                app.logger.info(f'New step created - ID: {step.id}, Type: {step_type}')
-                variables = StepVariable.query.filter_by(step_id=step.id).all()
-                app.logger.info(f'Variables for step {step.id}: {[{"id": v.id, "name": v.name} for v in variables]}')                
-                flash('Adım başarıyla oluşturuldu', 'success')
-                return redirect(url_for('process_detail', process_id=process_id))
-            except Exception as e:
-                db.session.rollback()
-                flash(f'Adım oluşturulurken hata oluştu: {str(e)}', 'error')
-            return redirect(url_for('process_detail', process_id=process_id))    
-    parent_step = None
-    full_order = None
-    if parent_id:
-        parent_step = Step.query.get(parent_id)
-        if parent_step:
-            next_order = 1
-            last_substep = Step.query.filter_by(parent_id=parent_id).order_by(Step.order.desc()).first()
-            if last_substep:
-                next_order = last_substep.order + 1
-            full_order = f"{parent_step.get_full_order()}.{next_order}"    
+                params = json.loads(procedure_params)
+                step.procedure_params = json.dumps(params)
+            except json.JSONDecodeError:
+                flash('Prosedür parametreleri geçerli bir JSON formatında değil.', 'error')
+                return redirect(url_for('new_step', process_id=process_id, parent_id=parent_id))
+        
+        if step_type == 'excel_import' and import_process_id:
+            step.import_process_id = import_process_id
+        
+        db.session.add(step)
+        db.session.commit()
+        
+        return redirect(url_for('process_detail', process_id=process_id))
+    
+    # Ana adımları al
+    main_steps = Step.query.filter_by(process_id=process_id, parent_id=None).order_by(Step.order).all()
+    
+    # Alt adımları al
+    substeps = []
+    for main_step in main_steps:
+        substeps.extend(get_substeps_recursive(main_step.id))
+    
+    # Tüm adımları birleştir
+    all_steps = main_steps + substeps
+    
+    # Import processlerini al
+    import_processes = ImportProcess.query.order_by(ImportProcess.name).all()
+    
     return render_template('new_step.html', 
                          process=process, 
-                         parent_id=parent_id, 
+                         parent_id=parent_id,
                          parent_step=parent_step,
-                         full_order=full_order)
+                         steps=all_steps,
+                         import_processes=import_processes)
 
 @app.route('/step/<int:step_id>/execute', methods=['POST'])
 def execute_step(step_id):
     step = Step.query.get_or_404(step_id)
     
     if step.status == 'done':
-        return jsonify({
-            'success': False,
-            'message': 'Bu adım zaten tamamlandı.'
-        })        
+        return jsonify({'status': 'error', 'message': 'Bu adım zaten tamamlanmış.'})
     
-    # Adımı çalıştır
-    result = ProcessExecutor.execute_step(
-        step.type,
-        step.file_path,
-        output_dir=step.output_dir if hasattr(step, 'output_dir') else None,
-        variables=step.variables if hasattr(step, 'variables') else None
-    )
-    
-    if result['success']:
-        step.status = 'done'
-        step.completed_at = datetime.now()  # Tamamlanma zamanını kaydet
-        db.session.commit()
-    
-    return jsonify(result)
-
+    try:
+        if step.type == 'excel_import':
+            if not step.import_process_id:
+                return jsonify({'status': 'error', 'message': 'Import process seçilmemiş.'})
+            
+            import_process = ImportProcess.query.get(step.import_process_id)
+            if not import_process:
+                return jsonify({'status': 'error', 'message': 'Seçilen import process bulunamadı.'})
+            
+            # Import process'i çalıştır
+            executor = ProcessExecutor()
+            result = executor.execute_import_process(import_process)
+            
+            if result.get('status') == 'success':
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                db.session.commit()
+                return jsonify({'status': 'success', 'message': 'Excel import başarıyla tamamlandı.'})
+            else:
+                return jsonify({'status': 'error', 'message': result.get('message', 'Excel import sırasında bir hata oluştu.')})
+        else:
+            # Diğer adım tipleri için mevcut işlemleri yap
+            executor = ProcessExecutor()
+            result = executor.execute_step(step)
+            
+            if result.get('status') == 'success':
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                db.session.commit()
+                return jsonify({'status': 'success', 'message': 'Adım başarıyla tamamlandı.'})
+            else:
+                return jsonify({'status': 'error', 'message': result.get('message', 'Adım çalıştırılırken bir hata oluştu.')})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/step/<int:step_id>/variables/new', methods=['GET', 'POST'])
 def new_variable(step_id):
