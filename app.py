@@ -2197,40 +2197,52 @@ def get_oracle_packages():
         # Tüm prosedürleri ve paketleri al
         query = """
         WITH procedure_info AS (
+            -- Bağımsız prosedürler
             SELECT 
-                p.object_name,
-                p.procedure_name,
+                p.object_name as procedure_name,
+                NULL as package_name,
                 p.object_type,
-                CASE 
-                    WHEN p.object_type = 'PROCEDURE' THEN NULL
-                    ELSE p.object_name
-                END as package_name
+                a.argument_name,
+                a.data_type,
+                a.in_out
             FROM 
                 all_procedures p
+                LEFT JOIN all_arguments a ON p.object_name = a.object_name 
+                AND p.owner = a.owner
             WHERE 
                 p.owner = :owner
-                AND p.object_type IN ('PROCEDURE', 'PACKAGE')
+                AND p.object_type = 'PROCEDURE'
+            UNION ALL
+            -- Paket içindeki prosedürler
+            SELECT 
+                p.procedure_name,
+                p.object_name as package_name,
+                p.object_type,
+                a.argument_name,
+                a.data_type,
+                a.in_out
+            FROM 
+                all_procedures p
+                LEFT JOIN all_arguments a ON p.object_name = a.object_name 
+                AND p.procedure_name = a.object_name
+                AND p.owner = a.owner
+            WHERE 
+                p.owner = :owner
+                AND p.object_type = 'PACKAGE'
         )
         SELECT DISTINCT
-            pi.object_name,
-            pi.procedure_name,
-            pi.object_type,
-            pi.package_name,
-            a.argument_name,
-            a.data_type,
-            a.in_out
+            procedure_name,
+            package_name,
+            object_type,
+            argument_name,
+            data_type,
+            in_out
         FROM 
-            procedure_info pi
-            LEFT JOIN all_arguments a ON 
-                (pi.object_type = 'PROCEDURE' AND a.object_name = pi.object_name)
-                OR 
-                (pi.object_type = 'PACKAGE' AND a.object_name = pi.object_name AND a.package_name = pi.package_name)
-        WHERE 
-            a.owner = :owner
+            procedure_info
         ORDER BY 
-            pi.package_name NULLS FIRST,
-            pi.object_name,
-            a.position
+            package_name NULLS FIRST,
+            procedure_name,
+            argument_name
         """
         
         cursor.execute(query, owner=app.config['ORACLE_USERNAME'].upper())
@@ -2239,7 +2251,7 @@ def get_oracle_packages():
         # Sonuçları düzenle
         procedures = {}
         for row in results:
-            object_name, procedure_name, object_type, package_name, arg_name, data_type, in_out = row
+            procedure_name, package_name, object_type, arg_name, data_type, in_out = row
             
             # Eğer prosedür bir paket içindeyse
             if package_name:
@@ -2257,10 +2269,10 @@ def get_oracle_packages():
             else:
                 if 'STANDALONE' not in procedures:
                     procedures['STANDALONE'] = {}
-                if object_name not in procedures['STANDALONE']:
-                    procedures['STANDALONE'][object_name] = []
+                if procedure_name not in procedures['STANDALONE']:
+                    procedures['STANDALONE'][procedure_name] = []
                 if arg_name:  # Eğer argüman varsa
-                    procedures['STANDALONE'][object_name].append({
+                    procedures['STANDALONE'][procedure_name].append({
                         'name': arg_name,
                         'type': data_type,
                         'in_out': in_out
