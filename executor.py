@@ -295,8 +295,52 @@ class ProcessExecutor:
                 'error': str(e)
             }
 
-   
-    
+    @staticmethod
+    def execute_sql_script(step):
+        """SQL script adımını çalıştırır"""
+        try:
+            # SQL dosyasını oku
+            with open(step.file_path, 'r', encoding='utf-8') as f:
+                sql_content = f.read()
+
+            # Oracle bağlantısını oluştur
+            import oracledb
+            connection = oracledb.connect(
+                user=ProcessExecutor._oracle_config['username'],
+                password=ProcessExecutor._oracle_config['password'],
+                dsn=ProcessExecutor._oracle_config['dsn']
+            )
+            cursor = connection.cursor()
+
+            # SQL komutlarını ayır (noktalı virgül ile ayrılmış)
+            sql_commands = [cmd.strip() for cmd in sql_content.split(';') if cmd.strip()]
+
+            # Her komutu çalıştır
+            results = []
+            for cmd in sql_commands:
+                try:
+                    cursor.execute(cmd)
+                    if cursor.rowcount > 0:
+                        results.append(f"{cursor.rowcount} satır etkilendi")
+                except Exception as e:
+                    results.append(f"Hata: {str(e)}")
+
+            # Değişiklikleri kaydet
+            connection.commit()
+            cursor.close()
+            connection.close()
+
+            return {
+                'status': 'success',
+                'message': 'SQL script başarıyla çalıştırıldı',
+                'output': '\n'.join(results)
+            }
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'SQL script çalıştırılırken hata oluştu: {str(e)}'
+            }
 
     @staticmethod
     def execute_step(step_type, file_path, **kwargs):
@@ -305,17 +349,7 @@ class ProcessExecutor:
         if check_result:
             return check_result
             
-        if step_type == 'python_script':
-            # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
-            output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
-            print(f"[DEBUG] output_dir: {output_dir}")
-            if output_dir:
-                ProcessExecutor._files_before = set(os.listdir(output_dir))
-            return ProcessExecutor.execute_python_script(file_path, output_dir,kwargs.get('variables'))
-        elif step_type == 'sql_script':
-            return ProcessExecutor.execute_sql_script(file_path)
-        elif step_type == 'sql_procedure':
-            return ProcessExecutor.execute_sql_script(file_path, is_procedure=True)
+        
         elif step_type == 'mail':
             variables = kwargs.get('variables', [])
             if not variables:
@@ -425,54 +459,4 @@ class ProcessExecutor:
             return {
                 'status': 'error',
                 'message': f'Excel import sırasında hata oluştu: {str(e)}'
-            } 
-
-    def execute_step(self, step, output_dir=None, variables=None):
-        """Adımı çalıştırır"""
-        try:
-            # Eğer süreç zaten başlamışsa hata ver
-            if not self.process.is_started:
-                return {
-                    'status': 'error',
-                    'message': 'Süreç henüz başlatılmamış'
-                }
-
-            # Adım tipine göre işlem yap
-            if step.type == 'python_script':
-                # Python script için file_path gerekli
-                if not step.file_path:
-                    return {
-                        'status': 'error',
-                        'message': 'Python script dosyası belirtilmemiş'
-                    }
-                return self.execute_python_script(step.file_path, output_dir, variables)
-            elif step.type == 'sql_script':
-                # SQL script için file_path gerekli
-                if not step.file_path:
-                    return {
-                        'status': 'error',
-                        'message': 'SQL script dosyası belirtilmemiş'
-                    }
-                return self.execute_sql_script(step)
-            elif step.type == 'sql_procedure':
-                return self.execute_sql_procedure(step)
-            elif step.type == 'mail':
-                return self.execute_mail(step)
-            elif step.type == 'excel_import':
-                # Excel import için file_path gerekli
-                if not step.file_path:
-                    return {
-                        'status': 'error',
-                        'message': 'Excel dosyası belirtilmemiş'
-                    }
-                return self.execute_excel_import(step)
-            else:
-                return {
-                    'status': 'error',
-                    'message': f'Bilinmeyen adım tipi: {step.type}'
-                }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': str(e)
             } 

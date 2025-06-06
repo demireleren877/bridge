@@ -477,7 +477,16 @@ def execute_step(step_id):
         return jsonify({'status': 'error', 'message': 'Bu adım zaten tamamlanmış.'})
     
     try:
-        if step.type == 'excel_import':
+        if step.type == 'python_script':
+            # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
+            output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
+            print(f"[DEBUG] output_dir: {output_dir}")
+            if output_dir:
+                ProcessExecutor._files_before = set(os.listdir(output_dir))
+            return ProcessExecutor.execute_python_script(step.file_path, output_dir,step.variables)
+        elif step.type == 'sql_script':
+            return ProcessExecutor.execute_sql_script(step)
+        elif step.type == 'excel_import':
             if not step.import_process_id:
                 return jsonify({'status': 'error', 'message': 'Import process seçilmemiş.'})
             
