@@ -157,11 +157,22 @@
                 const packageSelect = document.getElementById('package_name');
                 packageSelect.innerHTML = '<option value="">Paket Seçin</option>';
 
-                for (const packageName in data.packages) {
+                // Önce bağımsız prosedürleri ekle
+                if (data.packages['STANDALONE']) {
                     const option = document.createElement('option');
-                    option.value = packageName;
-                    option.textContent = packageName;
+                    option.value = 'STANDALONE';
+                    option.textContent = 'Bağımsız Prosedürler';
                     packageSelect.appendChild(option);
+                }
+
+                // Sonra paketleri ekle
+                for (const packageName in data.packages) {
+                    if (packageName !== 'STANDALONE') {
+                        const option = document.createElement('option');
+                        option.value = packageName;
+                        option.textContent = packageName;
+                        packageSelect.appendChild(option);
+                    }
                 }
             }
         } catch (error) {

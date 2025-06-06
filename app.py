@@ -537,7 +537,12 @@ def execute_step(step_id):
                     params[var.name] = var.default_value
                 
                 # Prosedürü çağır
-                cursor.callproc(f"{package_name}.{procedure_name}", list(params.values()))
+                if package_name == 'STANDALONE':
+                    # Bağımsız prosedür
+                    cursor.callproc(procedure_name, list(params.values()))
+                else:
+                    # Paket içindeki prosedür
+                    cursor.callproc(f"{package_name}.{procedure_name}", list(params.values()))
                 
                 # Değişiklikleri kaydet
                 connection.commit()
@@ -2189,49 +2194,65 @@ def get_oracle_packages():
         )
         cursor = connection.cursor()
         
-        # Paketleri ve prosedürleri al
+        # Tüm prosedürleri ve paketleri al
         query = """
-        SELECT 
-            p.object_name as package_name,
-            pp.procedure_name,
+        SELECT DISTINCT
+            p.object_name as procedure_name,
+            p.object_type,
+            pp.package_name,
             pp.argument_name,
             pp.data_type,
             pp.in_out
         FROM 
             all_procedures p
-            JOIN all_arguments pp ON p.object_name = pp.object_name 
+            LEFT JOIN all_arguments pp ON p.object_name = pp.object_name 
             AND p.owner = pp.owner
         WHERE 
-            p.object_type = 'PACKAGE'
-            AND p.owner = :owner
+            p.owner = :owner
+            AND p.object_type IN ('PROCEDURE', 'PACKAGE')
         ORDER BY 
-            p.object_name, pp.procedure_name, pp.position
+            p.object_name, pp.position
         """
         
         cursor.execute(query, owner=app.config['ORACLE_USERNAME'].upper())
         results = cursor.fetchall()
         
         # Sonuçları düzenle
-        packages = {}
+        procedures = {}
         for row in results:
-            package_name, procedure_name, arg_name, data_type, in_out = row
-            if package_name not in packages:
-                packages[package_name] = {}
-            if procedure_name not in packages[package_name]:
-                packages[package_name][procedure_name] = []
-            if arg_name:  # Eğer argüman varsa
-                packages[package_name][procedure_name].append({
-                    'name': arg_name,
-                    'type': data_type,
-                    'in_out': in_out
-                })
+            procedure_name, object_type, package_name, arg_name, data_type, in_out = row
+            
+            # Eğer prosedür bir paket içindeyse
+            if package_name:
+                if package_name not in procedures:
+                    procedures[package_name] = {}
+                if procedure_name not in procedures[package_name]:
+                    procedures[package_name][procedure_name] = []
+                if arg_name:  # Eğer argüman varsa
+                    procedures[package_name][procedure_name].append({
+                        'name': arg_name,
+                        'type': data_type,
+                        'in_out': in_out
+                    })
+            # Eğer bağımsız bir prosedürse
+            else:
+                if 'STANDALONE' not in procedures:
+                    procedures['STANDALONE'] = {}
+                if procedure_name not in procedures['STANDALONE']:
+                    procedures['STANDALONE'][procedure_name] = []
+                if arg_name:  # Eğer argüman varsa
+                    procedures['STANDALONE'][procedure_name].append({
+                        'name': arg_name,
+                        'type': data_type,
+                        'in_out': in_out
+                    })
         
         cursor.close()
         connection.close()
         
         return jsonify({
             'status': 'success',
-            'packages': packages
+            'packages': procedures
         })
         
     except Exception as e:
