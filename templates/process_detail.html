@@ -924,9 +924,17 @@
             const row = button.closest('tr');
             const stepName = row.querySelector('.step-name').textContent;
             const stepType = row.dataset.stepType;
+            const stepStatus = row.dataset.status;
 
-            if (!confirm(`"${stepName}" adımını çalıştırmak istediğinizden emin misiniz?`)) {
-                return;
+            // Eğer adım zaten tamamlanmışsa uyarı göster
+            if (stepStatus === 'done') {
+                if (!confirm(`"${stepName}" adımı zaten tamamlanmış. Tekrar çalıştırmak istediğinizden emin misiniz?`)) {
+                    return;
+                }
+            } else {
+                if (!confirm(`"${stepName}" adımını çalıştırmak istediğinizden emin misiniz?`)) {
+                    return;
+                }
             }
 
             button.disabled = true;
@@ -999,9 +1007,6 @@
                                 new bootstrap.Modal(resultModal).show();
                             }
                         }
-
-                        // Mail durumlarını sunucudan kontrol et
-                        await checkMailReplies(stepId);
                     } else {
                         // Mail tipi değilse tamamlandı olarak işaretle
                         updateStepStatus(stepId, 'done', 'Tamamlandı');
@@ -1011,7 +1016,7 @@
                         const resultError = document.getElementById('resultError');
 
                         if (resultSuccess && resultError) {
-                            let outputMessage = result.output;
+                            let outputMessage = result.output || 'İşlem başarıyla tamamlandı.';
                             if (outputMessage.includes('Çıktı dosyası:')) {
                                 const [message, filePath] = outputMessage.split('Çıktı dosyası:');
                                 outputMessage = `${message}\nÇıktı dosyası:\n${filePath.trim()}`;
@@ -1031,7 +1036,7 @@
                     const resultSuccess = document.getElementById('resultSuccess');
 
                     if (resultError && resultSuccess) {
-                        resultError.textContent = `Hata: ${result.error}`;
+                        resultError.textContent = `Hata: ${result.error || result.message || 'Bilinmeyen bir hata oluştu'}`;
                         resultError.classList.remove('d-none');
                         resultSuccess.classList.add('d-none');
 
@@ -1043,6 +1048,19 @@
                 }
             } catch (error) {
                 console.error('Adım çalıştırılırken hata oluştu:', error);
+                const resultError = document.getElementById('resultError');
+                const resultSuccess = document.getElementById('resultSuccess');
+
+                if (resultError && resultSuccess) {
+                    resultError.textContent = `Hata: ${error.message || 'Bilinmeyen bir hata oluştu'}`;
+                    resultError.classList.remove('d-none');
+                    resultSuccess.classList.add('d-none');
+
+                    const resultModal = document.getElementById('resultModal');
+                    if (resultModal) {
+                        new bootstrap.Modal(resultModal).show();
+                    }
+                }
             } finally {
                 button.disabled = false;
             }
