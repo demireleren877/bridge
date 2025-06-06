@@ -2196,22 +2196,41 @@ def get_oracle_packages():
         
         # Tüm prosedürleri ve paketleri al
         query = """
+        WITH procedure_info AS (
+            SELECT 
+                p.object_name,
+                p.procedure_name,
+                p.object_type,
+                CASE 
+                    WHEN p.object_type = 'PROCEDURE' THEN NULL
+                    ELSE p.object_name
+                END as package_name
+            FROM 
+                all_procedures p
+            WHERE 
+                p.owner = :owner
+                AND p.object_type IN ('PROCEDURE', 'PACKAGE')
+        )
         SELECT DISTINCT
-            p.object_name as procedure_name,
-            p.object_type,
-            pp.package_name,
-            pp.argument_name,
-            pp.data_type,
-            pp.in_out
+            pi.object_name,
+            pi.procedure_name,
+            pi.object_type,
+            pi.package_name,
+            a.argument_name,
+            a.data_type,
+            a.in_out
         FROM 
-            all_procedures p
-            LEFT JOIN all_arguments pp ON p.object_name = pp.object_name 
-            AND p.owner = pp.owner
+            procedure_info pi
+            LEFT JOIN all_arguments a ON 
+                (pi.object_type = 'PROCEDURE' AND a.object_name = pi.object_name)
+                OR 
+                (pi.object_type = 'PACKAGE' AND a.object_name = pi.object_name AND a.package_name = pi.package_name)
         WHERE 
-            p.owner = :owner
-            AND p.object_type IN ('PROCEDURE', 'PACKAGE')
+            a.owner = :owner
         ORDER BY 
-            p.object_name, pp.position
+            pi.package_name NULLS FIRST,
+            pi.object_name,
+            a.position
         """
         
         cursor.execute(query, owner=app.config['ORACLE_USERNAME'].upper())
@@ -2220,7 +2239,7 @@ def get_oracle_packages():
         # Sonuçları düzenle
         procedures = {}
         for row in results:
-            procedure_name, object_type, package_name, arg_name, data_type, in_out = row
+            object_name, procedure_name, object_type, package_name, arg_name, data_type, in_out = row
             
             # Eğer prosedür bir paket içindeyse
             if package_name:
@@ -2238,10 +2257,10 @@ def get_oracle_packages():
             else:
                 if 'STANDALONE' not in procedures:
                     procedures['STANDALONE'] = {}
-                if procedure_name not in procedures['STANDALONE']:
-                    procedures['STANDALONE'][procedure_name] = []
+                if object_name not in procedures['STANDALONE']:
+                    procedures['STANDALONE'][object_name] = []
                 if arg_name:  # Eğer argüman varsa
-                    procedures['STANDALONE'][procedure_name].append({
+                    procedures['STANDALONE'][object_name].append({
                         'name': arg_name,
                         'type': data_type,
                         'in_out': in_out
