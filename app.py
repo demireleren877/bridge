@@ -471,53 +471,55 @@ def new_step(process_id):
 
 @app.route('/step/<int:step_id>/execute', methods=['POST'])
 def execute_step(step_id):
-    step = Step.query.get_or_404(step_id)
-    
-    if step.status == 'done':
-        return jsonify({'status': 'error', 'message': 'Bu adım zaten tamamlanmış.'})
-    
+    """Adımı çalıştırır"""
     try:
+        step = Step.query.get_or_404(step_id)
+        
+        # Adım tipine göre işlem yap
         if step.type == 'python_script':
             # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
             output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
-            print(f"[DEBUG] output_dir: {output_dir}")
             if output_dir:
                 ProcessExecutor._files_before = set(os.listdir(output_dir))
-            return ProcessExecutor.execute_python_script(step.file_path, output_dir,step.variables)
+            result = ProcessExecutor.execute_python_script(step, output_dir, step.variables)
         elif step.type == 'sql_script':
-            return ProcessExecutor.execute_sql_script(step)
+            result = ProcessExecutor.execute_sql_script(step)
+        elif step.type == 'sql_procedure':
+            result = ProcessExecutor.execute_sql_script(step)
+        elif step.type == 'mail':
+            result = ProcessExecutor.execute_mail(step)
         elif step.type == 'excel_import':
-            if not step.import_process_id:
-                return jsonify({'status': 'error', 'message': 'Import process seçilmemiş.'})
-            
-            import_process = ImportProcess.query.get(step.import_process_id)
-            if not import_process:
-                return jsonify({'status': 'error', 'message': 'Seçilen import process bulunamadı.'})
-            
-            # Import process'i çalıştır
-            result = ProcessExecutor.execute_import_process(import_process)
-            
-            if result.get('status') == 'success':
-                step.status = 'done'
-                step.completed_at = datetime.now()
-                db.session.commit()
-                return jsonify({'status': 'success', 'message': 'Excel import başarıyla tamamlandı.'})
-            else:
-                return jsonify({'status': 'error', 'message': result.get('message', 'Excel import sırasında bir hata oluştu.')})
+            result = ProcessExecutor.execute_import_process(step.import_process)
         else:
-            # Diğer adım tipleri için mevcut işlemleri yap
-            result = ProcessExecutor.execute_step(step.type, step.file_path, output_dir=None, variables=step.variables)
+            return jsonify({
+                'status': 'error',
+                'message': f'Desteklenmeyen adım tipi: {step.type}'
+            }), 400
+
+        # Sonucu kontrol et
+        if result.get('status') == 'success':
+            # Adımı tamamlandı olarak işaretle
+            step.completed = True
+            step.completed_at = datetime.now()
+            db.session.commit()
             
-            if result.get('success'):
-                step.status = 'done'
-                step.completed_at = datetime.now()
-                db.session.commit()
-                return jsonify({'status': 'success', 'message': 'Adım başarıyla tamamlandı.'})
-            else:
-                return jsonify({'status': 'error', 'message': result.get('error', 'Adım çalıştırılırken bir hata oluştu.')})
+            return jsonify({
+                'status': 'success',
+                'message': result.get('message', 'İşlem başarıyla tamamlandı'),
+                'has_excel_output': result.get('has_excel_output', False),
+                'excel_filename': result.get('excel_filename')
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': result.get('message', 'İşlem başarısız oldu')
+            }), 500
+
     except Exception as e:
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': str(e)})
+        return jsonify({
+            'status': 'error',
+            'message': f'Adım çalıştırılırken hata oluştu: {str(e)}'
+        }), 500
 
 @app.route('/step/<int:step_id>/variables/new', methods=['GET', 'POST'])
 def new_variable(step_id):
