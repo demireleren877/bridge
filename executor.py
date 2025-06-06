@@ -317,11 +317,21 @@ class ProcessExecutor:
 
             # Her komutu çalıştır
             results = []
-            output_data = None
-            output_columns = None
+            output_data = []
+            output_columns = []
+            sheet_names = []
+            current_comment = "Sorgu Sonucu"
 
             for cmd in sql_commands:
                 try:
+                    # Komutun üstündeki yorum satırlarını bul
+                    lines = cmd.split('\n')
+                    for line in reversed(lines):
+                        line = line.strip()
+                        if line.startswith('--'):
+                            current_comment = line[2:].strip()
+                            break
+                    
                     cursor.execute(cmd)
                     if cursor.rowcount > 0:
                         results.append(f"{cursor.rowcount} satır etkilendi")
@@ -329,26 +339,36 @@ class ProcessExecutor:
                     # Eğer SELECT veya WITH ile başlayan sorgu ise ve veri döndürüyorsa
                     cmd_upper = cmd.strip().upper()
                     if (cmd_upper.startswith('SELECT') or cmd_upper.startswith('WITH')) and cursor.description:
-                        output_columns = [col[0] for col in cursor.description]
-                        output_data = cursor.fetchall()
-                        
-                        # Excel dosyasını oluştur
-                        import pandas as pd
-                        from datetime import datetime
-                        
-                        # DataFrame oluştur
-                        df = pd.DataFrame(output_data, columns=output_columns)
-                        
-                        # Excel dosyasını kaydet
-                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                        excel_filename = f"sql_output_{timestamp}.xlsx"
-                        excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
-                        df.to_excel(excel_path, index=False)
-                        
-                        results.append(f"Çıktı Excel dosyası olarak kaydedildi: {excel_filename}")
+                        output_columns.append([col[0] for col in cursor.description])
+                        output_data.append(cursor.fetchall())
+                        sheet_names.append(current_comment)
+                        results.append(f"'{current_comment}' sorgusu için veri alındı")
                 
                 except Exception as e:
                     results.append(f"Hata: {str(e)}")
+
+            # Eğer veri varsa Excel dosyası oluştur
+            if output_data:
+                import pandas as pd
+                from datetime import datetime
+                
+                # Excel dosyasını kaydet
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                excel_filename = f"sql_output_{timestamp}.xlsx"
+                excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
+                
+                # Excel writer oluştur
+                with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                    # Her veri seti için ayrı sayfa oluştur
+                    for i, (data, columns, sheet_name) in enumerate(zip(output_data, output_columns, sheet_names)):
+                        # DataFrame oluştur
+                        df = pd.DataFrame(data, columns=columns)
+                        # Sayfa adını temizle (Excel'de geçersiz karakterleri kaldır)
+                        clean_sheet_name = "".join(c for c in sheet_name if c.isalnum() or c in (' ', '-', '_'))[:31]
+                        # Sayfayı yaz
+                        df.to_excel(writer, sheet_name=clean_sheet_name, index=False)
+                
+                results.append(f"Tüm çıktılar Excel dosyasına kaydedildi: {excel_filename}")
 
             # Değişiklikleri kaydet
             connection.commit()
@@ -359,8 +379,8 @@ class ProcessExecutor:
                 'status': 'success',
                 'message': 'SQL script başarıyla çalıştırıldı',
                 'output': '\n'.join(results),
-                'has_excel_output': output_data is not None,
-                'excel_filename': excel_filename if output_data is not None else None
+                'has_excel_output': bool(output_data),
+                'excel_filename': excel_filename if output_data else None
             }
 
         except Exception as e:
@@ -486,44 +506,4 @@ class ProcessExecutor:
             return {
                 'status': 'error',
                 'message': f'Excel import sırasında hata oluştu: {str(e)}'
-            } 
-
-    def execute_step(self, step, output_dir=None, variables=None):
-        """Adımı çalıştırır"""
-        try:
-            # Adım tipine göre işlem yap
-            if step.type == 'python_script':
-                result = self.execute_python_script(step, output_dir, variables)
-            elif step.type == 'sql_script':
-                result = self.execute_sql_script(step)
-            elif step.type == 'sql_procedure':
-                result = self.execute_sql_script(step)
-            elif step.type == 'mail':
-                result = self.execute_mail(step)
-            elif step.type == 'excel_import':
-                result = self.execute_import_process(step.import_process)
-            else:
-                result = {
-                    'status': 'error',
-                    'message': f'Desteklenmeyen adım tipi: {step.type}'
-                }
-
-            # Yanıt formatını kontrol et ve düzelt
-            if isinstance(result, dict):
-                if 'status' not in result:
-                    result['status'] = 'success' if 'message' in result else 'error'
-                if 'message' not in result:
-                    result['message'] = 'İşlem başarıyla tamamlandı' if result['status'] == 'success' else 'İşlem başarısız oldu'
-            else:
-                result = {
-                    'status': 'error',
-                    'message': 'Geçersiz yanıt formatı'
-                }
-
-            return result
-
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'Adım çalıştırılırken hata oluştu: {str(e)}'
             } 
