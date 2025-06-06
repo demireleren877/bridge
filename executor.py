@@ -312,37 +312,49 @@ class ProcessExecutor:
             )
             cursor = connection.cursor()
 
-            # SQL komutlarını ayır (noktalı virgül ile ayrılmış)
-            sql_commands = [cmd.strip() for cmd in sql_content.split(';') if cmd.strip()]
+            # SQL komutlarını ve yorum satırlarını ayır
+            blocks = []
+            current_block = {'comment': None, 'sql': []}
+            
+            for line in sql_content.split('\n'):
+                line = line.strip()
+                if line.startswith('--'):
+                    # Eğer önceki blokta SQL varsa, onu kaydet
+                    if current_block['sql']:
+                        blocks.append(current_block)
+                    # Yeni blok başlat
+                    current_block = {'comment': line[2:].strip(), 'sql': []}
+                elif line and not line.startswith('--'):
+                    current_block['sql'].append(line)
+            
+            # Son bloğu ekle
+            if current_block['sql']:
+                blocks.append(current_block)
 
-            # Her komutu çalıştır
+            # Her bloğu çalıştır
             results = []
             output_data = []
             output_columns = []
             sheet_names = []
-            current_comment = "Sorgu Sonucu"
 
-            for cmd in sql_commands:
+            for block in blocks:
                 try:
-                    # Komutun üstündeki yorum satırlarını bul
-                    lines = cmd.split('\n')
-                    for line in reversed(lines):
-                        line = line.strip()
-                        if line.startswith('--'):
-                            current_comment = line[2:].strip()
-                            break
-                    
-                    cursor.execute(cmd)
+                    # SQL komutunu birleştir
+                    sql_cmd = ' '.join(block['sql'])
+                    if not sql_cmd:
+                        continue
+
+                    cursor.execute(sql_cmd)
                     if cursor.rowcount > 0:
                         results.append(f"{cursor.rowcount} satır etkilendi")
                     
                     # Eğer SELECT veya WITH ile başlayan sorgu ise ve veri döndürüyorsa
-                    cmd_upper = cmd.strip().upper()
+                    cmd_upper = sql_cmd.strip().upper()
                     if (cmd_upper.startswith('SELECT') or cmd_upper.startswith('WITH')) and cursor.description:
                         output_columns.append([col[0] for col in cursor.description])
                         output_data.append(cursor.fetchall())
-                        sheet_names.append(current_comment)
-                        results.append(f"'{current_comment}' sorgusu için veri alındı")
+                        sheet_names.append(block['comment'] or "Sorgu Sonucu")
+                        results.append(f"'{block['comment'] or 'Sorgu Sonucu'}' sorgusu için veri alındı")
                 
                 except Exception as e:
                     results.append(f"Hata: {str(e)}")
@@ -353,8 +365,9 @@ class ProcessExecutor:
                 from datetime import datetime
                 
                 # Excel dosyasını kaydet
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                excel_filename = f"sql_output_{timestamp}.xlsx"
+                # SQL dosyasının adını al (uzantısız)
+                sql_filename = os.path.splitext(os.path.basename(step.file_path))[0]
+                excel_filename = f"{sql_filename}.xlsx"
                 excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
                 
                 # Excel writer oluştur
