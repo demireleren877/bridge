@@ -487,3 +487,43 @@ class ProcessExecutor:
                 'status': 'error',
                 'message': f'Excel import sırasında hata oluştu: {str(e)}'
             } 
+
+    def execute_step(self, step, output_dir=None, variables=None):
+        """Adımı çalıştırır"""
+        try:
+            # Adım tipine göre işlem yap
+            if step.type == 'python_script':
+                result = self.execute_python_script(step, output_dir, variables)
+            elif step.type == 'sql_script':
+                result = self.execute_sql_script(step)
+            elif step.type == 'sql_procedure':
+                result = self.execute_sql_script(step)
+            elif step.type == 'mail':
+                result = self.execute_mail(step)
+            elif step.type == 'excel_import':
+                result = self.execute_import_process(step.import_process)
+            else:
+                result = {
+                    'status': 'error',
+                    'message': f'Desteklenmeyen adım tipi: {step.type}'
+                }
+
+            # Yanıt formatını kontrol et ve düzelt
+            if isinstance(result, dict):
+                if 'status' not in result:
+                    result['status'] = 'success' if 'message' in result else 'error'
+                if 'message' not in result:
+                    result['message'] = 'İşlem başarıyla tamamlandı' if result['status'] == 'success' else 'İşlem başarısız oldu'
+            else:
+                result = {
+                    'status': 'error',
+                    'message': 'Geçersiz yanıt formatı'
+                }
+
+            return result
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Adım çalıştırılırken hata oluştu: {str(e)}'
+            } 
