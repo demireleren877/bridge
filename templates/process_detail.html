@@ -465,6 +465,8 @@
                 </div>
                 <h5 class="mb-0">Adım Çalıştırılıyor...</h5>
                 <p class="text-muted mt-2" id="loadingMessage">Lütfen bekleyiniz...</p>
+                <button type="button" class="btn btn-secondary mt-3" data-bs-dismiss="modal" id="closeModalBtn"
+                    style="display: none;">Kapat</button>
             </div>
         </div>
     </div>
@@ -1122,10 +1124,12 @@
     async function executeStep(stepId) {
         const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
         const loadingMessage = document.getElementById('loadingMessage');
+        const closeModalBtn = document.getElementById('closeModalBtn');
 
         try {
             loadingModal.show();
             loadingMessage.textContent = 'Adım çalıştırılıyor...';
+            closeModalBtn.style.display = 'none';
 
             const response = await fetch(`/step/${stepId}/execute`, {
                 method: 'POST',
@@ -1138,21 +1142,14 @@
 
             if (result.status === 'success') {
                 loadingMessage.textContent = 'Adım başarıyla tamamlandı!';
-                setTimeout(() => {
-                    loadingModal.hide();
-                    location.reload();
-                }, 1000);
+                closeModalBtn.style.display = 'inline-block';
             } else {
                 loadingMessage.textContent = `Hata: ${result.message}`;
-                setTimeout(() => {
-                    loadingModal.hide();
-                }, 2000);
+                closeModalBtn.style.display = 'inline-block';
             }
         } catch (error) {
             loadingMessage.textContent = `Bir hata oluştu: ${error.message}`;
-            setTimeout(() => {
-                loadingModal.hide();
-            }, 2000);
+            closeModalBtn.style.display = 'inline-block';
         }
     }
 
