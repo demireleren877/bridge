@@ -460,10 +460,14 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-body text-center p-4">
-                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                <div id="loadingSpinner" class="spinner-border text-primary mb-3" role="status"
+                    style="width: 3rem; height: 3rem;">
                     <span class="visually-hidden">Yükleniyor...</span>
                 </div>
-                <h5 class="mb-0">Adım Çalıştırılıyor...</h5>
+                <div id="resultIcon" class="mb-3" style="display: none;">
+                    <i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>
+                </div>
+                <h5 class="mb-0" id="modalTitle">Adım Çalıştırılıyor...</h5>
                 <p class="text-muted mt-2" id="loadingMessage">Lütfen bekleyiniz...</p>
                 <button type="button" class="btn btn-secondary mt-3" data-bs-dismiss="modal" id="closeModalBtn"
                     style="display: none;">Kapat</button>
@@ -1125,11 +1129,19 @@
         const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
         const loadingMessage = document.getElementById('loadingMessage');
         const closeModalBtn = document.getElementById('closeModalBtn');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const resultIcon = document.getElementById('resultIcon');
+        const modalTitle = document.getElementById('modalTitle');
 
         try {
-            loadingModal.show();
-            loadingMessage.textContent = 'Adım çalıştırılıyor...';
+            // Modal'ı başlangıç durumuna getir
+            loadingSpinner.style.display = 'block';
+            resultIcon.style.display = 'none';
             closeModalBtn.style.display = 'none';
+            modalTitle.textContent = 'Adım Çalıştırılıyor...';
+            loadingMessage.textContent = 'Lütfen bekleyiniz...';
+
+            loadingModal.show();
 
             const response = await fetch(`/step/${stepId}/execute`, {
                 method: 'POST',
@@ -1140,15 +1152,29 @@
 
             const result = await response.json();
 
+            // Loading animasyonunu kaldır ve sonuç ikonunu göster
+            loadingSpinner.style.display = 'none';
+            resultIcon.style.display = 'block';
+
             if (result.status === 'success') {
+                modalTitle.textContent = 'Başarılı!';
                 loadingMessage.textContent = 'Adım başarıyla tamamlandı!';
-                closeModalBtn.style.display = 'inline-block';
+                resultIcon.innerHTML = '<i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>';
             } else {
+                modalTitle.textContent = 'Hata!';
                 loadingMessage.textContent = `Hata: ${result.message}`;
-                closeModalBtn.style.display = 'inline-block';
+                resultIcon.innerHTML = '<i class="fas fa-times-circle text-danger" style="font-size: 3rem;"></i>';
             }
+
+            closeModalBtn.style.display = 'inline-block';
+
         } catch (error) {
+            // Loading animasyonunu kaldır ve hata ikonunu göster
+            loadingSpinner.style.display = 'none';
+            resultIcon.style.display = 'block';
+            modalTitle.textContent = 'Hata!';
             loadingMessage.textContent = `Bir hata oluştu: ${error.message}`;
+            resultIcon.innerHTML = '<i class="fas fa-times-circle text-danger" style="font-size: 3rem;"></i>';
             closeModalBtn.style.display = 'inline-block';
         }
     }
