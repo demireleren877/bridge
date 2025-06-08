@@ -381,6 +381,9 @@ def new_process():
 def delete_process(process_id):
     try:
         process = Process.query.get_or_404(process_id)
+        category_id = process.category_id
+        year = process.year
+        
         all_steps = []
         main_steps = Step.query.filter_by(process_id=process_id, parent_id=None).all()        
         for main_step in main_steps:
@@ -401,11 +404,17 @@ def delete_process(process_id):
         db.session.commit()
         
         flash('Süreç ve tüm ilişkili veriler başarıyla silindi', 'success')
+        
+        # Kategori bazlı yönlendirme
+        if category_id:
+            return redirect(url_for('category_processes', category_id=category_id, year=year))
+        else:
+            return redirect(url_for('uncategorized_processes', year=year))
+            
     except Exception as e:
         db.session.rollback()
         flash(f'Süreç silinirken hata oluştu: {str(e)}', 'error')
-    
-    return redirect(url_for('index'))
+        return redirect(url_for('index'))
 
 @app.route('/process/<int:process_id>/step/new', methods=['GET', 'POST'])
 def new_step(process_id):
@@ -453,7 +462,7 @@ def new_step(process_id):
                     dsn=app.config['ORACLE_DSN']
                 )
                 cursor = connection.cursor()
-                
+    
                 # Bağımsız prosedür veya paket içindeki prosedür için farklı sorgular
                 if package_name == 'STANDALONE':
                     query = """
@@ -1510,6 +1519,25 @@ def edit_category(category_id):
             return redirect(url_for('category_years', category_id=category_id))
     
     return render_template('edit_category.html', category=category)
+
+@app.route('/category/<int:category_id>/delete', methods=['POST'])
+def delete_category(category_id):
+    try:
+        category = ProcessCategory.query.get_or_404(category_id)
+        
+        # Kategoriye ait süreçleri kategorisiz yap
+        Process.query.filter_by(category_id=category_id).update({Process.category_id: None})
+        
+        # Kategoriyi sil
+        db.session.delete(category)
+        db.session.commit()
+        
+        flash('Kategori başarıyla silindi', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Kategori silinirken hata oluştu: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
 
 @app.route('/process/<int:process_id>/update_category', methods=['POST'])
 def update_process_category(process_id):

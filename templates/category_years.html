@@ -120,6 +120,13 @@
             <a href="{{ url_for('edit_category', category_id=category.id) }}" class="btn btn-outline-light me-2">
                 <i class="bi bi-pencil"></i> Kategoriyi Düzenle
             </a>
+            <form action="{{ url_for('delete_category', category_id=category.id) }}" method="POST"
+                class="d-inline delete-category-form">
+                <button type="submit" class="btn btn-outline-danger me-2"
+                    onclick="return confirm('Bu kategoriyi silmek istediğinizden emin misiniz? Kategoriye ait süreçler kategorisiz olarak işaretlenecektir.')">
+                    <i class="bi bi-trash"></i> Kategoriyi Sil
+                </button>
+            </form>
             <a href="{{ url_for('new_process') }}" class="btn btn-success">
                 <i class="bi bi-plus-lg"></i> Yeni Süreç
             </a>

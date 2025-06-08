@@ -8,15 +8,18 @@
         box-shadow: none;
         border-color: #86b7fe;
     }
+
     .form-switch .form-check-input {
         width: 45px;
         height: 24px;
         margin-top: 0;
     }
+
     .form-switch .form-check-label {
         padding-top: 2px;
         margin-left: 10px;
     }
+
     .card-body {
         padding: 1.5rem;
     }
@@ -73,16 +76,19 @@
                     <div class="card">
                         <div class="card-body">
                             <div class="mb-3">
-                                <input type="text" class="form-control mail-input" id="mail_to" placeholder="Alıcılar (virgülle ayırın)">
+                                <input type="text" class="form-control mail-input" id="mail_to"
+                                    placeholder="Alıcılar (virgülle ayırın)">
                             </div>
                             <div class="mb-3">
-                                <input type="text" class="form-control mail-input" id="mail_cc" placeholder="CC (virgülle ayırın)">
+                                <input type="text" class="form-control mail-input" id="mail_cc"
+                                    placeholder="CC (virgülle ayırın)">
                             </div>
                             <div class="mb-3">
                                 <input type="text" class="form-control mail-input" id="mail_subject" placeholder="Konu">
                             </div>
                             <div class="mb-3">
-                                <textarea class="form-control mail-input" id="mail_body" rows="3" placeholder="İçerik"></textarea>
+                                <textarea class="form-control mail-input" id="mail_body" rows="3"
+                                    placeholder="İçerik"></textarea>
                             </div>
                             <div class="form-check form-switch">
                                 <input class="form-check-input mail-input" type="checkbox" id="mail_active">
@@ -93,7 +99,8 @@
                     </div>
                     {% else %}
                     <label for="default_value" class="form-label">Varsayılan Değer</label>
-                    <input type="text" class="form-control" id="default_value" name="default_value" placeholder="Değer girin...">
+                    <input type="text" class="form-control" id="default_value" name="default_value"
+                        placeholder="Değer girin...">
                     {% endif %}
                 </div>
 
@@ -182,7 +189,7 @@
     });
 
     // Sayfa yüklendiğinde mail konfigürasyonunu JSON'a dönüştür
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         if (document.getElementById('var_type').value === 'mail_config') {
             const mailInputs = document.querySelectorAll('.mail-input');
             mailInputs.forEach(input => {

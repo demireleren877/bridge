@@ -453,28 +453,6 @@
         </div>
     </div>
 </div>
-
-<!-- Yükleniyor Modal -->
-<div class="modal fade" id="loadingModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-    aria-labelledby="loadingModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-body text-center p-4">
-                <div id="loadingSpinner" class="spinner-border text-primary mb-3" role="status"
-                    style="width: 3rem; height: 3rem;">
-                    <span class="visually-hidden">Yükleniyor...</span>
-                </div>
-                <div id="resultIcon" class="mb-3" style="display: none;">
-                    <i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>
-                </div>
-                <h5 class="mb-0" id="modalTitle">Adım Çalıştırılıyor...</h5>
-                <p class="text-muted mt-2" id="loadingMessage">Lütfen bekleyiniz...</p>
-                <button type="button" class="btn btn-secondary mt-3" data-bs-dismiss="modal" id="closeModalBtn"
-                    style="display: none;">Kapat</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -962,6 +940,8 @@
             }
 
             button.disabled = true;
+            const originalIcon = button.innerHTML;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
             try {
                 const response = await fetch(`/step/${stepId}/execute`, {
@@ -1087,6 +1067,7 @@
                 }
             } finally {
                 button.disabled = false;
+                button.innerHTML = originalIcon;
             }
         });
     });
@@ -1124,88 +1105,9 @@
         }
     }
 
-    // Adım çalıştırma fonksiyonunu güncelle
-    async function executeStep(stepId) {
-        const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-        const loadingMessage = document.getElementById('loadingMessage');
-        const closeModalBtn = document.getElementById('closeModalBtn');
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        const resultIcon = document.getElementById('resultIcon');
-        const modalTitle = document.getElementById('modalTitle');
-
-        try {
-            // Modal'ı başlangıç durumuna getir
-            loadingSpinner.style.display = 'block';
-            resultIcon.style.display = 'none';
-            closeModalBtn.style.display = 'none';
-            modalTitle.textContent = 'Adım Çalıştırılıyor...';
-            loadingMessage.textContent = 'Lütfen bekleyiniz...';
-
-            loadingModal.show();
-
-            const response = await fetch(`/step/${stepId}/execute`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const result = await response.json();
-
-            // Loading animasyonunu kaldır ve sonuç ikonunu göster
-            loadingSpinner.style.display = 'none';
-            resultIcon.style.display = 'block';
-
-            if (result.status === 'success') {
-                modalTitle.textContent = 'Başarılı!';
-                loadingMessage.textContent = 'Adım başarıyla tamamlandı!';
-                resultIcon.innerHTML = '<i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>';
-            } else {
-                modalTitle.textContent = 'Hata!';
-                loadingMessage.textContent = `Hata: ${result.message}`;
-                resultIcon.innerHTML = '<i class="fas fa-times-circle text-danger" style="font-size: 3rem;"></i>';
-            }
-
-            closeModalBtn.style.display = 'inline-block';
-
-        } catch (error) {
-            // Loading animasyonunu kaldır ve hata ikonunu göster
-            loadingSpinner.style.display = 'none';
-            resultIcon.style.display = 'block';
-            modalTitle.textContent = 'Hata!';
-            loadingMessage.textContent = `Bir hata oluştu: ${error.message}`;
-            resultIcon.innerHTML = '<i class="fas fa-times-circle text-danger" style="font-size: 3rem;"></i>';
-            closeModalBtn.style.display = 'inline-block';
-        }
-    }
-
-    // Adım çalıştırma işlemleri
-    document.querySelectorAll('.execute-step').forEach(button => {
-        button.addEventListener('click', async () => {
-            const stepId = button.dataset.stepId;
-            await executeStep(stepId);
-        });
-    });
-
-    // Adım çalıştırma işlemleri
-    document.querySelectorAll('.check-mail-status').forEach(button => {
-        button.addEventListener('click', async () => {
-            const stepId = button.dataset.stepId;
-            await executeStep(stepId);
-        });
-    });
-
-    // Adım çalıştırma işlemleri
-    document.querySelectorAll('.show-variables').forEach(button => {
-        button.addEventListener('click', async () => {
-            const stepId = button.dataset.stepId;
-            await executeStep(stepId);
-        });
-    });
-
     // Değişken modalı işlemleri
     document.querySelectorAll('.show-variables').forEach(button => {
-        button.addEventListener('click', async () => {
+        button.addEventListener('click', () => {
             const stepId = button.dataset.stepId;
             const stepType = button.closest('tr').dataset.stepType;
             document.getElementById('modalStepId').value = stepId;
