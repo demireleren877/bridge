@@ -466,12 +466,17 @@ def new_step(process_id):
             responsible=request.form.get('responsible', '')
         )
 
+        # Önce step'i kaydet ve id'sini al
+        db.session.add(step)
+        db.session.flush()  # Bu noktada step.id değeri atanmış olacak
+
         # Eğer SQL script ise ve dosya yolu belirtilmişse
         if step.type == 'sql_script' and step.file_path:
             try:
                 # Dosyayı kontrol et
                 if not os.path.exists(step.file_path):
                     flash('SQL dosyası bulunamadı.', 'error')
+                    db.session.rollback()
                     return render_template('new_step.html', process=process, parent_step=parent_step)
 
                 # SQL içeriğini oku ve parametreleri bul
@@ -483,20 +488,25 @@ def new_step(process_id):
                 for param_name in parameters:
                     var_type = request.form.get(f'param_type_{param_name}', 'text')
                     variable = StepVariable(
-                        step_id=step.id,
+                        step_id=step.id,  # Artık step.id değeri mevcut
                         name=param_name,
-                        var_type=var_type,  # Kullanıcının seçtiği tip
+                        var_type=var_type,
                         default_value='',
                         scope='step_only'
                     )
                     db.session.add(variable)
             except Exception as e:
+                db.session.rollback()
                 flash(f'SQL dosyası okunurken hata oluştu: {str(e)}', 'error')
                 return render_template('new_step.html', process=process, parent_step=parent_step)
 
-        db.session.add(step)
-        db.session.commit()
-        return redirect(url_for('process_detail', process_id=process_id))
+        try:
+            db.session.commit()
+            return redirect(url_for('process_detail', process_id=process_id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Adım kaydedilirken hata oluştu: {str(e)}', 'error')
+            return render_template('new_step.html', process=process, parent_step=parent_step)
     
     return render_template('new_step.html', 
                          process=process, 
@@ -511,23 +521,13 @@ def execute_step(step_id):
         return jsonify({'status': 'error', 'message': 'Bu adım zaten tamamlanmış.'})
     
     try:
-        if step.type == 'python_script':
-            # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
-            output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
-            print(f"[DEBUG] output_dir: {output_dir}")
-            if output_dir:
-                ProcessExecutor._files_before = set(os.listdir(output_dir))
-            return ProcessExecutor.execute_python_script(step.file_path, output_dir, step.variables)
-        elif step.type == 'sql_script':
-            result = ProcessExecutor.execute_sql_script(step)
-            if result.get('status') == 'success':
-                step.status = 'done'
-                step.completed_at = datetime.now()
-                db.session.commit()
-                return jsonify(result)
-            else:
-                return jsonify(result)
-        elif step.type == 'sql_procedure':
+        # Adımı çalışıyor durumuna getir
+        step.status = 'running'
+        db.session.commit()
+
+        if step.type == 'sql_procedure':
+            connection = None
+            cursor = None
             try:
                 # Oracle bağlantısını oluştur
                 connection = oracledb.connect(
@@ -538,21 +538,61 @@ def execute_step(step_id):
                 cursor = connection.cursor()
                 
                 # Prosedür adını ve paket adını al
-                package_name = step.file_path.split('.')[0]  # file_path formatı: "PACKAGE_NAME.PROCEDURE_NAME"
-                procedure_name = step.file_path.split('.')[1]
-                
-                # Değişkenlerden parametre değerlerini al
-                params = {}
+                if '.' in step.file_path:
+                    package_name, procedure_name = step.file_path.split('.')
+                else:
+                    package_name = 'STANDALONE'
+                    procedure_name = step.file_path
+
+                # Değişkenlerden parametre değerlerini al ve dönüştür
+                param_values = []
                 for var in step.variables:
-                    params[var.name] = var.default_value
+                    # Değeri al ve tek tırnakları temizle
+                    value = var.default_value.strip("'") if var.default_value else None
+                    
+                    if not value:
+                        param_values.append(None)
+                        continue
+
+                    if var.var_type == 'date':
+                        try:
+                            # Tarihi datetime nesnesine çevir
+                            from datetime import datetime
+                            # Önce YYYY-MM-DD formatından datetime'a çevir
+                            date_obj = datetime.strptime(value, '%Y-%m-%d')
+                            # Oracle DATE tipinde bir değişken oluştur
+                            date_var = cursor.var(oracledb.DB_TYPE_DATE)
+                            # Değişkene datetime nesnesini ata
+                            date_var.setvalue(0, date_obj)
+                            value = date_var
+                        except ValueError as e:
+                            step.status = 'failed'
+                            step.error_message = f'Tarih değeri dönüştürülürken hata oluştu ({var.name}): {str(e)}'
+                            db.session.commit()
+                            return jsonify({
+                                'status': 'error',
+                                'message': step.error_message
+                            })
+                    elif var.var_type == 'number':
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            step.status = 'failed'
+                            step.error_message = f'Sayısal değer dönüştürülürken hata oluştu ({var.name})'
+                            db.session.commit()
+                            return jsonify({
+                                'status': 'error',
+                                'message': step.error_message
+                            })
+                    param_values.append(value)
                 
                 # Prosedürü çağır
                 if package_name == 'STANDALONE':
                     # Bağımsız prosedür
-                    cursor.callproc(procedure_name, list(params.values()))
+                    cursor.callproc(procedure_name, param_values)
                 else:
                     # Paket içindeki prosedür
-                    cursor.callproc(f"{package_name}.{procedure_name}", list(params.values()))
+                    cursor.callproc(f"{package_name}.{procedure_name}", param_values)
                 
                 # Değişiklikleri kaydet
                 connection.commit()
@@ -568,48 +608,104 @@ def execute_step(step_id):
                     'status': 'success',
                     'message': 'Prosedür başarıyla çalıştırıldı'
                 })
+            except oracledb.Error as e:
+                error_msg = str(e)
+                if cursor:
+                    cursor.close()
+                if connection:
+                    connection.close()
                 
-            except Exception as e:
                 # Hata durumunda adımın durumunu güncelle
                 step.status = 'failed'
-                step.error_message = str(e)
+                step.error_message = f'Oracle hatası: {error_msg}'
                 db.session.commit()
                 
                 return jsonify({
                     'status': 'error',
-                    'message': f'Prosedür çalıştırılırken hata oluştu: {str(e)}'
+                    'message': step.error_message
                 })
-        elif step.type == 'excel_import':
-            if not step.import_process_id:
-                return jsonify({'status': 'error', 'message': 'Import process seçilmemiş.'})
-            
-            import_process = ImportProcess.query.get(step.import_process_id)
-            if not import_process:
-                return jsonify({'status': 'error', 'message': 'Seçilen import process bulunamadı.'})
-            
-            # Import process'i çalıştır
-            result = ProcessExecutor.execute_import_process(import_process)
-            
-            if result.get('status') == 'success':
-                step.status = 'done'
-                step.completed_at = datetime.now()
+            except Exception as e:
+                if cursor:
+                    cursor.close()
+                if connection:
+                    connection.close()
+                
+                # Hata durumunda adımın durumunu güncelle
+                step.status = 'failed'
+                step.error_message = f'Beklenmeyen hata: {str(e)}'
                 db.session.commit()
-                return jsonify({'status': 'success', 'message': 'Excel import başarıyla tamamlandı.'})
-            else:
-                return jsonify({'status': 'error', 'message': result.get('message', 'Excel import sırasında bir hata oluştu.')})
+                
+                return jsonify({
+                    'status': 'error',
+                    'message': step.error_message
+                })
+
+        elif step.type == 'python_script':
+            try:
+                # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
+                output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
+                print(f"[DEBUG] output_dir: {output_dir}")
+                if output_dir:
+                    ProcessExecutor._files_before = set(os.listdir(output_dir))
+                result = ProcessExecutor.execute_python_script(step.file_path, output_dir, step.variables)
+                
+                if result.get('success'):
+                    step.status = 'done'
+                    step.completed_at = datetime.now()
+                else:
+                    step.status = 'failed'
+                    step.error_message = result.get('error')
+                
+                db.session.commit()
+                return jsonify(result)
+            except Exception as e:
+                step.status = 'failed'
+                step.error_message = str(e)
+                db.session.commit()
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                })
+
+        elif step.type == 'sql_script':
+            try:
+                result = ProcessExecutor.execute_sql_script(step)
+                if result.get('status') == 'success':
+                    step.status = 'done'
+                    step.completed_at = datetime.now()
+                else:
+                    step.status = 'failed'
+                    step.error_message = result.get('message')
+                
+                db.session.commit()
+                return jsonify(result)
+            except Exception as e:
+                step.status = 'failed'
+                step.error_message = str(e)
+                db.session.commit()
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                })
         else:
-            # Diğer adım tipleri için mevcut işlemleri yap
-            result = ProcessExecutor.execute_step(step.type, step.file_path, output_dir=None, variables=step.variables)
+            # Diğer adım tipleri için mevcut kod
+            result = ProcessExecutor.execute_step(step.type, step.file_path, variables=step.variables)
             
             if result.get('success'):
                 step.status = 'done'
                 step.completed_at = datetime.now()
-                db.session.commit()
-                return jsonify({'status': 'success', 'message': 'Adım başarıyla tamamlandı.'})
             else:
-                return jsonify({'status': 'error', 'message': result.get('error', 'Adım çalıştırılırken bir hata oluştu.')})
+                step.status = 'failed'
+                step.error_message = result.get('error')
+            
+            db.session.commit()
+            return jsonify(result)
+
     except Exception as e:
-        db.session.rollback()
+        # Genel hata durumunda adımın durumunu güncelle
+        step.status = 'failed'
+        step.error_message = str(e)
+        db.session.commit()
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/step/<int:step_id>/variables/new', methods=['GET', 'POST'])
@@ -2320,6 +2416,14 @@ def get_oracle_packages():
             'status': 'error',
             'message': str(e)
         })
+
+@app.route('/step/<int:step_id>/status', methods=['GET'])
+def check_step_status(step_id):
+    """Adımın durumunu kontrol eder"""
+    step = Step.query.get_or_404(step_id)
+    return jsonify({
+        'status': step.status
+    })
 
 if __name__ == '__main__':
     with app.app_context():
