@@ -329,55 +329,75 @@ class ProcessExecutor:
             )
             cursor = connection.cursor()
 
-            # SQL komutlarını ve yorum satırlarını ayır
-            blocks = []
-            current_block = {'comment': None, 'sql': []}
+            # SQL komutlarını ayır
+            # Önce her satırı ayrı ayrı al
+            lines = sql_content.split('\n')
+            current_command = []
+            commands = []
             
-            for line in sql_content.split('\n'):
+            for line in lines:
+                # Satırı temizle
                 line = line.strip()
+                
+                # Yorum satırlarını atla
                 if line.startswith('--'):
-                    # Eğer önceki blokta SQL varsa, onu kaydet
-                    if current_block['sql']:
-                        blocks.append(current_block)
-                    # Yeni blok başlat
-                    current_block = {'comment': line[2:].strip(), 'sql': []}
-                elif line and not line.startswith('--'):
-                    current_block['sql'].append(line)
-            
-            # Son bloğu ekle
-            if current_block['sql']:
-                blocks.append(current_block)
+                    continue
+                    
+                # Boş satırları atla
+                if not line:
+                    continue
+                
+                # Satırı mevcut komuta ekle
+                current_command.append(line)
+                
+                # Eğer satır noktalı virgül ile bitiyorsa, komutu tamamla
+                if line.rstrip().endswith(';'):
+                    # Komutu birleştir ve noktalı virgülü kaldır
+                    command = ' '.join(current_command).rstrip(';')
+                    commands.append(command)
+                    current_command = []
 
-            # Her bloğu çalıştır
+            # Eğer son komut noktalı virgül ile bitmiyorsa, onu da ekle
+            if current_command:
+                command = ' '.join(current_command).rstrip(';')
+                commands.append(command)
+
+            # Her komutu ayrı ayrı çalıştır
             results = []
             output_data = []
             output_columns = []
             sheet_names = []
 
-            for block in blocks:
+            for command in commands:
                 try:
-                    # SQL komutunu birleştir
-                    sql_cmd = ' '.join(block['sql'])
-                    if not sql_cmd:
-                        continue
+                    # Komutu temizle ve büyük harfe çevir (kontrol için)
+                    clean_command = command.strip().upper()
                     
-                    # Noktalı virgülü kaldır
-                    sql_cmd = sql_cmd.rstrip(';')
+                    # Komutu çalıştır
+                    cursor.execute(command)
                     
-                    cursor.execute(sql_cmd)
-                    if cursor.rowcount > 0:
-                        results.append(f"{cursor.rowcount} satır etkilendi")
+                    # DDL komutları için otomatik commit
+                    if any(clean_command.startswith(ddl) for ddl in ['CREATE', 'DROP', 'ALTER', 'TRUNCATE']):
+                        connection.commit()
+                        results.append(f"DDL komutu başarıyla çalıştırıldı: {command[:100]}...")
+                    else:
+                        # DML komutları için etkilenen satır sayısını kontrol et
+                        if cursor.rowcount > 0:
+                            results.append(f"{cursor.rowcount} satır etkilendi")
+                            connection.commit()
                     
-                    # Eğer SELECT veya WITH ile başlayan sorgu ise ve veri döndürüyorsa
-                    cmd_upper = sql_cmd.strip().upper()
-                    if (cmd_upper.startswith('SELECT') or cmd_upper.startswith('WITH')) and cursor.description:
-                        output_columns.append([col[0] for col in cursor.description])
-                        output_data.append(cursor.fetchall())
-                        sheet_names.append(block['comment'] or "Sorgu Sonucu")
-                        results.append(f"'{block['comment'] or 'Sorgu Sonucu'}' sorgusu için veri alındı")
+                    # SELECT sorguları için sonuçları topla
+                    if clean_command.startswith('SELECT') or clean_command.startswith('WITH'):
+                        if cursor.description:
+                            output_columns.append([col[0] for col in cursor.description])
+                            output_data.append(cursor.fetchall())
+                            sheet_names.append("Sorgu Sonucu")
+                            results.append(f"Sorgu başarıyla çalıştırıldı ve veriler alındı")
                 
                 except Exception as e:
-                    results.append(f"Hata: {str(e)}")
+                    # Hata durumunda rollback yap
+                    connection.rollback()
+                    results.append(f"Hata: {str(e)} - Komut: {command[:100]}...")
 
             # Eğer veri varsa Excel dosyası oluştur
             if output_data:
@@ -403,8 +423,7 @@ class ProcessExecutor:
                 
                 results.append(f"Tüm çıktılar Excel dosyasına kaydedildi: {excel_filename}")
 
-            # Değişiklikleri kaydet
-            connection.commit()
+            # Bağlantıyı kapat
             cursor.close()
             connection.close()
 
