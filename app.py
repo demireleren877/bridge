@@ -416,6 +416,12 @@ def delete_process(process_id):
         flash(f'Süreç silinirken hata oluştu: {str(e)}', 'error')
         return redirect(url_for('index'))
 
+def extract_sql_parameters(sql_content):
+    """SQL script içindeki &PARAMETRE formatındaki parametreleri bulur"""
+    pattern = r'&([A-Za-z][A-Za-z0-9_]*)'
+    matches = re.finditer(pattern, sql_content)
+    return list(set([match.group(1) for match in matches]))  # Tekrar eden parametreleri temizle
+
 @app.route('/process/<int:process_id>/step/new', methods=['GET', 'POST'])
 def new_step(process_id):
     process = Process.query.get_or_404(process_id)
@@ -433,105 +439,64 @@ def new_step(process_id):
             process_id=process_id,
             responsible=request.form.get('responsible', '')
         )
-        
-        # Eğer SQL prosedür tipi seçildiyse, file_path'i ayarla
-        if step.type == 'sql_procedure':
-            package_name = request.form.get('package_name')
-            procedure_name = request.form.get('procedure_name')
-            
-            if package_name and procedure_name:
-                # file_path formatı: "PACKAGE_NAME.PROCEDURE_NAME" veya "PROCEDURE_NAME" (bağımsız prosedür için)
-                if package_name == 'STANDALONE':
-                    step.file_path = procedure_name
-                else:
-                    step.file_path = f"{package_name}.{procedure_name}"
-        
-        db.session.add(step)
-        db.session.flush()  # ID'yi almak için flush
-        
-        # Eğer SQL prosedür tipi seçildiyse, parametreleri değişken olarak ekle
-        if step.type == 'sql_procedure':
-            package_name = request.form.get('package_name')
-            procedure_name = request.form.get('procedure_name')
-            
-            if package_name and procedure_name:
-                # Prosedür parametrelerini al
-                connection = oracledb.connect(
-                    user=app.config['ORACLE_USERNAME'],
-                    password=app.config['ORACLE_PASSWORD'],
-                    dsn=app.config['ORACLE_DSN']
-                )
-                cursor = connection.cursor()
-    
-                # Bağımsız prosedür veya paket içindeki prosedür için farklı sorgular
-                if package_name == 'STANDALONE':
-                    query = """
-                    SELECT 
-                        argument_name,
-                        data_type,
-                        in_out
-                    FROM 
-                        all_arguments
-                    WHERE 
-                        object_name = :procedure_name
-                        AND owner = :owner
-                    ORDER BY 
-                        position
-                    """
-                    cursor.execute(query, {
-                        'procedure_name': procedure_name,
-                        'owner': app.config['ORACLE_USERNAME'].upper()
-                    })
-                else:
-                    query = """
-                    SELECT 
-                        argument_name,
-                        data_type,
-                        in_out
-                    FROM 
-                        all_arguments
-                    WHERE 
-                        object_name = :package_name
-                        AND procedure_name = :procedure_name
-                        AND owner = :owner
-                    ORDER BY 
-                        position
-                    """
-                    cursor.execute(query, {
-                        'package_name': package_name,
-                        'procedure_name': procedure_name,
-                        'owner': app.config['ORACLE_USERNAME'].upper()
-                    })
-                
-                params = cursor.fetchall()
-                cursor.close()
-                connection.close()
-                
-                # Her parametre için değişken oluştur
-                for param in params:
-                    arg_name, data_type, in_out = param
-                    if arg_name:  # Eğer argüman adı varsa
+
+        # Dosya yükleme işlemi
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename:
+                # Güvenli dosya adı oluştur
+                filename = secure_filename(file.filename)
+                # Dosyayı kaydet
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
+                step.file_path = file_path
+
+                # Eğer SQL script ise, parametreleri otomatik olarak tespit et
+                if step.type == 'sql_script':
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        sql_content = f.read()
+                    parameters = extract_sql_parameters(sql_content)
+                    
+                    # Her parametre için form'dan gelen tipi al
+                    for param_name in parameters:
+                        var_type = request.form.get(f'param_type_{param_name}', 'text')
                         variable = StepVariable(
                             step_id=step.id,
-                            name=arg_name,
-                            var_type='text',  # Varsayılan olarak text tipi
-                            default_value=request.form.get(f'param_{arg_name}', ''),
+                            name=param_name,
+                            var_type=var_type,  # Kullanıcının seçtiği tip
+                            default_value='',
                             scope='step_only'
                         )
                         db.session.add(variable)
-        
+
+        db.session.add(step)
         db.session.commit()
         return redirect(url_for('process_detail', process_id=process_id))
     
-    all_steps = Step.query.filter_by(process_id=process_id).all()
-    import_processes = ImportProcess.query.order_by(ImportProcess.name).all()
-    
     return render_template('new_step.html', 
                          process=process, 
-                         parent_id=parent_id,
                          parent_step=parent_step,
-                         steps=all_steps,
-                         import_processes=import_processes)
+                         import_processes=ImportProcess.query.all())
+
+@app.route('/step/check_sql_params', methods=['POST'])
+def check_sql_params():
+    """SQL dosyasını analiz edip parametreleri döndürür"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Dosya bulunamadı'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Dosya seçilmedi'})
+    
+    try:
+        content = file.read().decode('utf-8')
+        parameters = extract_sql_parameters(content)
+        return jsonify({
+            'success': True,
+            'parameters': parameters
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 @app.route('/step/<int:step_id>/execute', methods=['POST'])
 def execute_step(step_id):

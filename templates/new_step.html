@@ -49,8 +49,10 @@
                             </select>
                         </div>
                         <div class="mb-3" id="file-path-container">
-                            <label for="file_path" class="form-label">Dosya Yolu</label>
-                            <input type="text" class="form-control" id="file_path" name="file_path">
+                            <label for="file" class="form-label">Dosya</label>
+                            <input type="file" class="form-control" id="file" name="file">
+                            <small class="text-muted">SQL script için, &PARAMETRE formatındaki parametreler otomatik
+                                olarak tespit edilecektir.</small>
                         </div>
                         <div class="mb-3" id="import-process-container" style="display: none;">
                             <label for="import_process_id" class="form-label">Import Process</label>
@@ -91,6 +93,27 @@
                         </div>
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SQL Parametreleri Modalı -->
+<div class="modal fade" id="sqlParamsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">SQL Parametreleri</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tespit edilen parametreler için tip seçin:</p>
+                <div id="params-container">
+                    <!-- Parametreler buraya dinamik olarak eklenecek -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="confirmParams">Devam Et</button>
             </div>
         </div>
     </div>
@@ -251,6 +274,76 @@
     // Sayfa yüklendiğinde paketleri yükle
     document.addEventListener('DOMContentLoaded', function () {
         loadPackages();
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const fileInput = document.getElementById('file');
+        const stepTypeSelect = document.getElementById('type');
+        const form = document.querySelector('form');
+        let detectedParams = [];
+
+        // SQL script seçildiğinde dosya değişikliğini dinle
+        fileInput.addEventListener('change', async function () {
+            if (stepTypeSelect.value === 'sql_script' && this.files.length > 0) {
+                const formData = new FormData();
+                formData.append('file', this.files[0]);
+
+                try {
+                    const response = await fetch('/step/check_sql_params', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+
+                    if (data.success && data.parameters.length > 0) {
+                        detectedParams = data.parameters;
+                        showParamsModal(data.parameters);
+                    }
+                } catch (error) {
+                    console.error('Hata:', error);
+                }
+            }
+        });
+
+        function showParamsModal(parameters) {
+            const container = document.getElementById('params-container');
+            container.innerHTML = '';
+
+            parameters.forEach(param => {
+                const div = document.createElement('div');
+                div.className = 'mb-3';
+                div.innerHTML = `
+                    <label class="form-label">${param}</label>
+                    <select class="form-select" name="param_type_${param}" required>
+                        <option value="text">Metin</option>
+                        <option value="number">Sayı</option>
+                        <option value="date">Tarih</option>
+                    </select>
+                `;
+                container.appendChild(div);
+            });
+
+            const modal = new bootstrap.Modal(document.getElementById('sqlParamsModal'));
+            modal.show();
+        }
+
+        // Form gönderilmeden önce kontrol
+        form.addEventListener('submit', function (e) {
+            if (stepTypeSelect.value === 'sql_script' && detectedParams.length > 0) {
+                let allTypesSelected = true;
+                detectedParams.forEach(param => {
+                    const select = document.querySelector(`select[name="param_type_${param}"]`);
+                    if (!select || !select.value) {
+                        allTypesSelected = false;
+                    }
+                });
+
+                if (!allTypesSelected) {
+                    e.preventDefault();
+                    alert('Lütfen tüm parametreler için tip seçin.');
+                }
+            }
+        });
     });
 </script>
 {% endblock %}

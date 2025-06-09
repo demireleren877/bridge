@@ -303,6 +303,23 @@ class ProcessExecutor:
             with open(step.file_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
 
+            # Değişkenleri kontrol et ve değerlerini yerleştir
+            if step.variables:
+                for variable in step.variables:
+                    param_name = f"&{variable.name}"
+                    if param_name in sql_content:
+                        # Değişken tipine göre değeri dönüştür
+                        value = variable.default_value
+                        if variable.var_type == 'number':
+                            # Sayısal değerler için tırnak kullanma
+                            sql_content = sql_content.replace(param_name, value)
+                        elif variable.var_type == 'date':
+                            # Tarih değerleri için TO_DATE fonksiyonu kullan
+                            sql_content = sql_content.replace(param_name, f"TO_DATE('{value}', 'YYYY-MM-DD')")
+                        else:  # text
+                            # Metin değerleri için tırnak kullan
+                            sql_content = sql_content.replace(param_name, f"'{value}'")
+
             # Oracle bağlantısını oluştur
             import oracledb
             connection = oracledb.connect(
@@ -343,7 +360,10 @@ class ProcessExecutor:
                     sql_cmd = ' '.join(block['sql'])
                     if not sql_cmd:
                         continue
-
+                    
+                    # Noktalı virgülü kaldır
+                    sql_cmd = sql_cmd.rstrip(';')
+                    
                     cursor.execute(sql_cmd)
                     if cursor.rowcount > 0:
                         results.append(f"{cursor.rowcount} satır etkilendi")
@@ -388,6 +408,12 @@ class ProcessExecutor:
             cursor.close()
             connection.close()
 
+            # Adımın durumunu güncelle
+            from app import db
+            step.status = 'completed'
+            step.completed_at = datetime.now()
+            db.session.commit()
+
             return {
                 'status': 'success',
                 'message': 'SQL script başarıyla çalıştırıldı',
@@ -397,6 +423,12 @@ class ProcessExecutor:
             }
 
         except Exception as e:
+            # Hata durumunda adımın durumunu güncelle
+            from app import db
+            step.status = 'failed'
+            step.error_message = str(e)
+            db.session.commit()
+            
             return {
                 'status': 'error',
                 'message': f'SQL script çalıştırılırken hata oluştu: {str(e)}'
