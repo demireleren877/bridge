@@ -284,9 +284,16 @@
     document.addEventListener('DOMContentLoaded', function () {
         const filePathInput = document.getElementById('file_path');
         const checkParamsBtn = document.getElementById('checkParams');
+        const confirmParamsBtn = document.getElementById('confirmParams');
         const stepTypeSelect = document.getElementById('type');
         const form = document.querySelector('form');
         let detectedParams = [];
+        let sqlParamsModal;
+
+        // Modal nesnesini oluştur
+        document.addEventListener('DOMContentLoaded', function () {
+            sqlParamsModal = new bootstrap.Modal(document.getElementById('sqlParamsModal'));
+        });
 
         // Parametre kontrol butonuna tıklandığında
         checkParamsBtn.addEventListener('click', async function () {
@@ -323,6 +330,53 @@
             }
         });
 
+        // Confirm params butonuna tıklandığında
+        confirmParamsBtn.addEventListener('click', function () {
+            let allTypesSelected = true;
+            let selectedTypes = {};
+
+            // Tüm parametrelerin tiplerini kontrol et
+            detectedParams.forEach(param => {
+                const select = document.querySelector(`select[name="param_type_${param}"]`);
+                if (!select || !select.value) {
+                    allTypesSelected = false;
+                } else {
+                    selectedTypes[param] = select.value;
+                }
+            });
+
+            if (!allTypesSelected) {
+                alert('Lütfen tüm parametreler için tip seçin.');
+                return;
+            }
+
+            // Seçilen tipleri göster
+            const paramSummary = document.createElement('div');
+            paramSummary.className = 'mt-3 parameter-summary';
+            paramSummary.innerHTML = '<h6>Seçilen Parametre Tipleri:</h6>';
+
+            Object.entries(selectedTypes).forEach(([param, type]) => {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-info me-2 mb-2';
+                badge.textContent = `${param}: ${type}`;
+                paramSummary.appendChild(badge);
+            });
+
+            // Varsa önceki özeti kaldır
+            const existingSummary = document.querySelector('.parameter-summary');
+            if (existingSummary) {
+                existingSummary.remove();
+            }
+
+            // Özeti dosya yolu alanının altına ekle
+            const filePathContainer = document.getElementById('file-path-container');
+            filePathContainer.appendChild(paramSummary);
+
+            // Modalı kapat
+            const modal = bootstrap.Modal.getInstance(document.getElementById('sqlParamsModal'));
+            modal.hide();
+        });
+
         function showParamsModal(parameters) {
             const container = document.getElementById('params-container');
             container.innerHTML = '';
@@ -333,6 +387,7 @@
                 div.innerHTML = `
                     <label class="form-label">${param}</label>
                     <select class="form-select" name="param_type_${param}" required>
+                        <option value="">Tip Seçin...</option>
                         <option value="text">Metin</option>
                         <option value="number">Sayı</option>
                         <option value="date">Tarih</option>
@@ -374,6 +429,12 @@
             } else {
                 filePathContainer.style.display = this.value === 'python_script' ? 'block' : 'none';
                 checkParamsBtn.style.display = 'none';
+
+                // Parametre özetini temizle
+                const existingSummary = document.querySelector('.parameter-summary');
+                if (existingSummary) {
+                    existingSummary.remove();
+                }
             }
         });
     });
