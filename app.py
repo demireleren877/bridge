@@ -422,6 +422,32 @@ def extract_sql_parameters(sql_content):
     matches = re.finditer(pattern, sql_content)
     return list(set([match.group(1) for match in matches]))  # Tekrar eden parametreleri temizle
 
+@app.route('/step/check_sql_params_from_path', methods=['POST'])
+def check_sql_params_from_path():
+    """Belirtilen dosya yolundaki SQL dosyasını analiz edip parametreleri döndürür"""
+    data = request.get_json()
+    file_path = data.get('file_path')
+    
+    if not file_path:
+        return jsonify({'error': 'Dosya yolu belirtilmedi'})
+    
+    try:
+        # Dosyanın var olup olmadığını kontrol et
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'Dosya bulunamadı'})
+            
+        # Dosyayı oku
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        parameters = extract_sql_parameters(content)
+        return jsonify({
+            'success': True,
+            'parameters': parameters
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 @app.route('/process/<int:process_id>/step/new', methods=['GET', 'POST'])
 def new_step(process_id):
     process = Process.query.get_or_404(process_id)
@@ -433,41 +459,40 @@ def new_step(process_id):
             name=request.form['name'],
             description=request.form['description'],
             type=request.form['type'],
-            file_path='',  # Başlangıçta boş olarak ayarla
+            file_path=request.form.get('file_path', ''),
             order=request.form.get('order', 0),
             parent_id=parent_id,
             process_id=process_id,
             responsible=request.form.get('responsible', '')
         )
 
-        # Dosya yükleme işlemi
-        if 'file' in request.files:
-            file = request.files['file']
-            if file and file.filename:
-                # Güvenli dosya adı oluştur
-                filename = secure_filename(file.filename)
-                # Dosyayı kaydet
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
-                step.file_path = file_path
+        # Eğer SQL script ise ve dosya yolu belirtilmişse
+        if step.type == 'sql_script' and step.file_path:
+            try:
+                # Dosyayı kontrol et
+                if not os.path.exists(step.file_path):
+                    flash('SQL dosyası bulunamadı.', 'error')
+                    return render_template('new_step.html', process=process, parent_step=parent_step)
 
-                # Eğer SQL script ise, parametreleri otomatik olarak tespit et
-                if step.type == 'sql_script':
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        sql_content = f.read()
-                    parameters = extract_sql_parameters(sql_content)
-                    
-                    # Her parametre için form'dan gelen tipi al
-                    for param_name in parameters:
-                        var_type = request.form.get(f'param_type_{param_name}', 'text')
-                        variable = StepVariable(
-                            step_id=step.id,
-                            name=param_name,
-                            var_type=var_type,  # Kullanıcının seçtiği tip
-                            default_value='',
-                            scope='step_only'
-                        )
-                        db.session.add(variable)
+                # SQL içeriğini oku ve parametreleri bul
+                with open(step.file_path, 'r', encoding='utf-8') as f:
+                    sql_content = f.read()
+                parameters = extract_sql_parameters(sql_content)
+                
+                # Her parametre için form'dan gelen tipi al
+                for param_name in parameters:
+                    var_type = request.form.get(f'param_type_{param_name}', 'text')
+                    variable = StepVariable(
+                        step_id=step.id,
+                        name=param_name,
+                        var_type=var_type,  # Kullanıcının seçtiği tip
+                        default_value='',
+                        scope='step_only'
+                    )
+                    db.session.add(variable)
+            except Exception as e:
+                flash(f'SQL dosyası okunurken hata oluştu: {str(e)}', 'error')
+                return render_template('new_step.html', process=process, parent_step=parent_step)
 
         db.session.add(step)
         db.session.commit()
@@ -477,26 +502,6 @@ def new_step(process_id):
                          process=process, 
                          parent_step=parent_step,
                          import_processes=ImportProcess.query.all())
-
-@app.route('/step/check_sql_params', methods=['POST'])
-def check_sql_params():
-    """SQL dosyasını analiz edip parametreleri döndürür"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'Dosya bulunamadı'})
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'Dosya seçilmedi'})
-    
-    try:
-        content = file.read().decode('utf-8')
-        parameters = extract_sql_parameters(content)
-        return jsonify({
-            'success': True,
-            'parameters': parameters
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)})
 
 @app.route('/step/<int:step_id>/execute', methods=['POST'])
 def execute_step(step_id):
