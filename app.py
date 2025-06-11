@@ -486,15 +486,17 @@ def new_step(process_id):
                 
                 # Her parametre için form'dan gelen tipi al
                 for param_name in parameters:
-                    var_type = request.form.get(f'param_type_{param_name}', 'text')
-                    variable = StepVariable(
-                        step_id=step.id,  # Artık step.id değeri mevcut
-                        name=param_name,
-                        var_type=var_type,
-                        default_value='',
-                        scope='step_only'
-                    )
-                    db.session.add(variable)
+                    param_type_key = f'param_type_{param_name}'
+                    var_type = request.form.get(param_type_key)
+                    if var_type:  # Eğer tip seçilmişse
+                        variable = StepVariable(
+                            step_id=step.id,
+                            name=param_name,
+                            var_type=var_type,
+                            default_value='',
+                            scope='step_only'
+                        )
+                        db.session.add(variable)
             except Exception as e:
                 db.session.rollback()
                 flash(f'SQL dosyası okunurken hata oluştu: {str(e)}', 'error')
@@ -1878,167 +1880,226 @@ def get_oracle_columns(table_name):
 @app.route('/api/excel/import', methods=['POST'])
 def import_excel():
     try:
-        file_input_mode = request.form.get('file_input_mode')
-        sheet_name = request.form.get('sheet_name')
-        create_new_table = request.form.get('create_new_table') == 'true'
-        column_mappings = json.loads(request.form.get('column_mappings', '[]'))
-        
-        # Dosya kontrolü
-        if file_input_mode == 'select':
-            if 'file' not in request.files:
-                return jsonify({'success': False, 'error': 'Dosya yüklenmedi'})
-            file = request.files['file']
-            df = pd.read_excel(file, sheet_name=sheet_name)
-        else:  # path mode
-            file_path = request.form.get('file_path')
-            if not file_path:
-                return jsonify({'success': False, 'error': 'Dosya yolu belirtilmedi'})
-            if not os.path.exists(file_path):
-                return jsonify({'success': False, 'error': 'Dosya bulunamadı'})
-            df = pd.read_excel(file_path, sheet_name=sheet_name)
-        
-        if not sheet_name:
-            return jsonify({'success': False, 'error': 'Sayfa adı gerekli'})
-        
-        # Oracle bağlantı bilgilerini al
-        username = app.config.get('ORACLE_USERNAME')
-        password = app.config.get('ORACLE_PASSWORD')
-        dsn = app.config.get('ORACLE_DSN')
-        
-        # Oracle'a bağlan
-        connection = oracledb.connect(user=username, password=password, dsn=dsn)
-        cursor = connection.cursor()
-        
-        if create_new_table:
-            # Yeni tablo adını al
-            new_table_name = request.form.get('new_table_name')
-            if not new_table_name:
-                return jsonify({'success': False, 'error': 'Yeni tablo adı gerekli'})
-            
-            # Tablo adını Oracle uyumlu formata dönüştür
-            new_table_name = convert_to_oracle_column_name(new_table_name)
-            
-            # CREATE TABLE sorgusunu oluştur
-            create_table_query = f"""
-            CREATE TABLE {new_table_name} (
-                {', '.join(f'"{mapping["oracle_column"]}" {mapping["oracle_type"]}' for mapping in column_mappings)}
+        import_process_id = request.form.get('import_process_id')
+        if not import_process_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'Import process ID gerekli'
+            })
+
+        import_process = ImportProcess.query.get(import_process_id)
+        if not import_process:
+            return jsonify({
+                'status': 'error',
+                'message': 'Import process bulunamadı'
+            })
+
+        # Excel dosyasını oku
+        try:
+            # Excel dosyasını chunk'lar halinde oku
+            chunk_size = 5000  # Her seferde okunacak satır sayısı
+            excel_data = pd.read_excel(
+                import_process.file_path,
+                sheet_name=import_process.sheet_name,
+                chunksize=chunk_size,
+                engine='openpyxl'
             )
-            """
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'Excel dosyası okunamadı: {str(e)}'
+            })
+
+        # Oracle bağlantısını oluştur
+        connection = oracledb.connect(
+            user=app.config['ORACLE_USERNAME'],
+            password=app.config['ORACLE_PASSWORD'],
+            dsn=app.config['ORACLE_DSN']
+        )
+        cursor = connection.cursor()
+
+        # Kolon eşleştirmelerini al
+        column_mappings = json.loads(import_process.column_mappings)
+
+        # Veri tipi dönüşüm fonksiyonları
+        def convert_to_oracle_type(value, data_type, length=None):
+            if pd.isna(value):
+                return None
             
             try:
-                cursor.execute(create_table_query)
-                connection.commit()
-            except oracledb.DatabaseError as e:
-                error, = e.args
-                return jsonify({'success': False, 'error': f'Tablo oluşturulurken hata: {error.message}'})
-            
-            table_name = new_table_name
-        else:
-            table_name = request.form.get('table_name')
-            if not table_name:
-                return jsonify({'success': False, 'error': 'Hedef tablo adı gerekli'})
-            
-            # Tablo yapısını al
-            cursor.execute(f"SELECT column_name FROM user_tab_columns WHERE table_name = '{table_name}'")
-            oracle_columns = [row[0] for row in cursor.fetchall()]
-            
-            # Eşleşen sütunları kontrol et
-            mapping_columns = [mapping['oracle_column'] for mapping in column_mappings]
-            invalid_columns = [col for col in mapping_columns if col not in oracle_columns]
-            
-            if invalid_columns:
-                return jsonify({
-                    'success': False,
-                    'error': f'Geçersiz sütun isimleri: {", ".join(invalid_columns)}'
-                })
-            
-            # İçe aktarma modunu kontrol et
-            import_mode = request.form.get('import_mode', 'append')
-            if import_mode == 'replace':
-                try:
-                    # Tabloyu temizle
-                    cursor.execute(f"TRUNCATE TABLE {table_name}")
-                    connection.commit()
-                except oracledb.DatabaseError as e:
-                    error, = e.args
-                    return jsonify({
-                        'success': False,
-                        'error': f'Tablo temizlenirken hata: {error.message}'
-                })
-        
-        # Verileri Oracle'a aktar
-        for _, row in df.iterrows():
-            values = []
-            columns = []
-            
-            for mapping in column_mappings:
-                excel_col = mapping['excel_column']
-                oracle_col = mapping['oracle_column']
-                oracle_type = mapping['oracle_type'].upper()
+                if data_type.startswith('NUMBER'):
+                    # Sayısal değerler için
+                    if isinstance(value, (int, float)):
+                        return value
+                    elif isinstance(value, str):
+                        # Binlik ayracı ve diğer karakterleri temizle
+                        clean_value = value.replace(',', '').replace('.', '').strip()
+                        return float(clean_value) if clean_value else 0
+                    else:
+                        return 0
                 
-                if excel_col in df.columns:
-                    value = row[excel_col]
-                    
-                    # Veri tipine göre dönüşüm yap
-                    try:
-                        if 'NUMBER' in oracle_type or 'INTEGER' in oracle_type or 'FLOAT' in oracle_type:
-                            # Sayısal alanlar için
-                            if pd.isna(value):
-                                value = 0
-                            else:
-                                value = float(value)
-                        elif 'DATE' in oracle_type or 'TIMESTAMP' in oracle_type:
-                            # Tarih alanları için
-                            if pd.isna(value):
-                                value = None
-                            elif isinstance(value, (pd.Timestamp, datetime)):
-                                value = value
-                            else:
-                                value = None
-                        else:
-                            # Karakter alanları için
-                            if pd.isna(value):
-                                value = None
-                            else:
-                                value = str(value)
-                    except (ValueError, TypeError):
-                        # Dönüşüm hatası durumunda
-                        if 'NUMBER' in oracle_type or 'INTEGER' in oracle_type or 'FLOAT' in oracle_type:
-                            value = 0
-                        else:
-                            value = None
-                    
-                    values.append(value)
-                    columns.append(oracle_col)
+                elif data_type == 'DATE':
+                    # Tarih değerleri için
+                    if isinstance(value, (datetime, pd.Timestamp)):
+                        return value
+                    elif isinstance(value, str):
+                        # Farklı tarih formatlarını dene
+                        try:
+                            return pd.to_datetime(value).to_pydatetime()
+                        except:
+                            return None
+                    else:
+                        return None
+                
+                elif data_type.startswith('TIMESTAMP'):
+                    # Timestamp değerleri için
+                    if isinstance(value, (datetime, pd.Timestamp)):
+                        return value
+                    elif isinstance(value, str):
+                        try:
+                            return pd.to_datetime(value).to_pydatetime()
+                        except:
+                            return None
+                    else:
+                        return None
+                
+                elif data_type.startswith('VARCHAR2') or data_type.startswith('CHAR'):
+                    # Metin değerleri için
+                    if value is None:
+                        return None
+                    str_value = str(value).strip()
+                    # Uzunluk kontrolü
+                    if length and len(str_value) > int(length):
+                        return str_value[:int(length)]
+                    return str_value
+                
+                else:
+                    # Diğer tipler için string dönüşümü
+                    return str(value) if value is not None else None
             
-            placeholders = ','.join([':' + str(i+1) for i in range(len(columns))])
-            quoted_columns = [f'"{col}"' for col in columns]
-            insert_query = f"INSERT INTO {table_name} ({','.join(quoted_columns)}) VALUES ({placeholders})"
-            
+            except Exception as e:
+                print(f"Veri dönüşüm hatası: {str(e)} - Değer: {value}, Tip: {data_type}")
+                return None
+
+        # Yeni tablo oluşturma
+        if import_process.create_new_table:
             try:
-                cursor.execute(insert_query, values)
-            except oracledb.DatabaseError as e:
-                error, = e.args
+                # Önce tabloyu sil (eğer varsa)
+                try:
+                    cursor.execute(f"DROP TABLE {import_process.table_name}")
+                    connection.commit()
+                except:
+                    pass  # Tablo yoksa devam et
+
+                # Yeni tabloyu oluştur
+                create_table_sql = f"CREATE TABLE {import_process.table_name} ("
+                columns = []
+                for excel_col, mapping in column_mappings.items():
+                    oracle_col = convert_to_oracle_column_name(mapping['oracle_column'])
+                    data_type = mapping['data_type']
+                    if data_type == 'VARCHAR2' and not mapping.get('length'):
+                        mapping['length'] = '255'
+                    column_def = f"{oracle_col} {data_type}"
+                    if mapping.get('length'):
+                        column_def += f"({mapping['length']})"
+                    columns.append(column_def)
+                create_table_sql += ", ".join(columns) + ")"
+
+                cursor.execute(create_table_sql)
+                connection.commit()
+            except Exception as e:
+                connection.rollback()
+                cursor.close()
+                connection.close()
                 return jsonify({
-                    'success': False, 
-                    'error': f'Veri aktarımı sırasında hata: {error.message}. Sütun: {excel_col}, Değer: {value}'
+                    'status': 'error',
+                    'message': f'Tablo oluşturulurken hata: {str(e)}'
                 })
-        
-        connection.commit()
+
+        # Veri aktarımı için hazırlık
+        excel_columns = list(column_mappings.keys())
+        oracle_columns = [convert_to_oracle_column_name(mapping['oracle_column']) 
+                         for mapping in column_mappings.values()]
+
+        # Insert SQL hazırla
+        placeholders = ':' + ', :'.join(map(str, range(1, len(oracle_columns) + 1)))
+        insert_sql = f"INSERT INTO {import_process.table_name} ({', '.join(oracle_columns)}) VALUES ({placeholders})"
+
+        total_rows = 0
+        error_rows = []
+        batch_size = 1000  # Her seferde commit edilecek satır sayısı
+
+        try:
+            # Her chunk için
+            for chunk_number, chunk_df in enumerate(excel_data):
+                # Sadece eşleştirilen kolonları al
+                chunk_df = chunk_df[excel_columns]
+                
+                # Veri dönüşümü yap
+                converted_rows = []
+                for _, row in chunk_df.iterrows():
+                    converted_row = []
+                    for excel_col, mapping in column_mappings.items():
+                        value = row[excel_col]
+                        data_type = mapping['data_type']
+                        length = mapping.get('length')
+                        converted_value = convert_to_oracle_type(value, data_type, length)
+                        converted_row.append(converted_value)
+                    converted_rows.append(converted_row)
+                
+                # Veriyi batch'ler halinde işle
+                for i in range(0, len(converted_rows), batch_size):
+                    batch = converted_rows[i:i + batch_size]
+                    try:
+                        # executemany ile toplu insert
+                        cursor.executemany(insert_sql, batch)
+                        connection.commit()
+                        total_rows += len(batch)
+                    except Exception as e:
+                        connection.rollback()
+                        # Hata durumunda tek tek insert dene
+                        for row_idx, row in enumerate(batch):
+                            try:
+                                cursor.execute(insert_sql, row)
+                                connection.commit()
+                                total_rows += 1
+                            except Exception as e:
+                                connection.rollback()
+                                error_rows.append({
+                                    'chunk': chunk_number,
+                                    'row': i + row_idx,
+                                    'error': str(e),
+                                    'data': str(row)
+                                })
+
+        except Exception as e:
+            connection.rollback()
+            cursor.close()
+            connection.close()
+            return jsonify({
+                'status': 'error',
+                'message': f'Veri aktarımı sırasında hata: {str(e)}'
+            })
+
+        # Son kullanma zamanını güncelle
+        import_process.last_used_at = datetime.utcnow()
+        db.session.commit()
+
         cursor.close()
         connection.close()
-        
-        # Sütun eşleştirme bilgilerini hazırla
-        column_mapping = {mapping['excel_column']: mapping['oracle_column'] for mapping in column_mappings}
-        
+
         return jsonify({
-            'success': True,
-            'message': f'{len(df)} satır başarıyla içe aktarıldı' + 
-                      (f' ve {table_name} tablosu oluşturuldu' if create_new_table else ''),
-            'column_mapping': column_mapping
+            'status': 'success',
+            'message': f'Toplam {total_rows} satır aktarıldı.',
+            'error_count': len(error_rows),
+            'errors': error_rows[:100]  # İlk 100 hatayı gönder
         })
+
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({
+            'status': 'error',
+            'message': f'Beklenmeyen hata: {str(e)}'
+        })
 
 # Import Process modeli
 class ImportProcess(db.Model):
@@ -2424,6 +2485,38 @@ def check_step_status(step_id):
     return jsonify({
         'status': step.status
     })
+
+@app.route('/step/<int:step_id>/update_status', methods=['POST'])
+def update_step_status(step_id):
+    """Adımın durumunu günceller"""
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        if not status:
+            return jsonify({
+                'status': 'error',
+                'message': 'Durum belirtilmedi'
+            }), 400
+        
+        step = Step.query.get_or_404(step_id)
+        step.status = status
+        
+        if status == 'done':
+            step.completed_at = datetime.now()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Durum güncellendi'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 if __name__ == '__main__':
     with app.app_context():
