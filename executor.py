@@ -7,6 +7,7 @@ import json
 from datetime import datetime
 import platform
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -364,64 +365,86 @@ class ProcessExecutor:
 
             # Her komutu ayrı ayrı çalıştır
             results = []
-            output_data = []
-            output_columns = []
-            sheet_names = []
-
-            for command in commands:
-                try:
-                    # Komutu temizle ve büyük harfe çevir (kontrol için)
-                    clean_command = command.strip().upper()
-                    
-                    # Komutu çalıştır
-                    cursor.execute(command)
-                    
-                    # DDL komutları için otomatik commit
-                    if any(clean_command.startswith(ddl) for ddl in ['CREATE', 'DROP', 'ALTER', 'TRUNCATE']):
-                        connection.commit()
-                        results.append(f"DDL komutu başarıyla çalıştırıldı: {command[:100]}...")
-                    else:
-                        # DML komutları için etkilenen satır sayısını kontrol et
-                        if cursor.rowcount > 0:
-                            results.append(f"{cursor.rowcount} satır etkilendi")
+            query_count = 1
+            
+            # Excel dosyasını hazırla
+            import pandas as pd
+            from datetime import datetime
+            
+            # SQL dosyasının adını al (uzantısız)
+            sql_filename = os.path.splitext(os.path.basename(step.file_path))[0]
+            excel_filename = f"{sql_filename}.xlsx"
+            excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
+            
+            # Excel writer oluştur
+            with pd.ExcelWriter(excel_path, engine='openpyxl', mode='w') as writer:
+                for command in commands:
+                    try:
+                        # Komutu temizle ve büyük harfe çevir (kontrol için)
+                        clean_command = command.strip().upper()
+                        
+                        # Komutu çalıştır
+                        cursor.execute(command)
+                        
+                        # DDL komutları için otomatik commit
+                        if any(clean_command.startswith(ddl) for ddl in ['CREATE', 'DROP', 'ALTER', 'TRUNCATE']):
                             connection.commit()
+                            results.append(f"DDL komutu başarıyla çalıştırıldı: {command[:100]}...")
+                        else:
+                            # DML komutları için etkilenen satır sayısını kontrol et
+                            if cursor.rowcount > 0:
+                                results.append(f"{cursor.rowcount} satır etkilendi")
+                                connection.commit()
+                        
+                        # SELECT sorguları için sonuçları topla
+                        if clean_command.startswith('SELECT') or clean_command.startswith('WITH'):
+                            if cursor.description:
+                                # Sütun isimlerini al
+                                columns = [col[0] for col in cursor.description]
+                                
+                                # Sayfa adını oluştur
+                                sheet_name = f"Sorgu {query_count}"
+                                clean_sheet_name = "".join(c for c in sheet_name if c.isalnum() or c in (' ', '-', '_'))[:31]
+                                
+                                # Chunk size'ı belirle (örn: 10000 satır)
+                                chunk_size = 10000
+                                first_chunk = True
+                                row_count = 0
+                                
+                                while True:
+                                    # Chunk'ı al
+                                    rows = cursor.fetchmany(chunk_size)
+                                    if not rows:
+                                        break
+                                        
+                                    # NumPy array'e çevir (daha hızlı)
+                                    data = np.array(rows)
+                                    
+                                    # DataFrame oluştur
+                                    df_chunk = pd.DataFrame(data, columns=columns)
+                                    
+                                    # Excel'e yaz
+                                    if first_chunk:
+                                        df_chunk.to_excel(writer, sheet_name=clean_sheet_name, index=False)
+                                        first_chunk = False
+                                    else:
+                                        # Mevcut sayfaya ekle
+                                        df_chunk.to_excel(writer, sheet_name=clean_sheet_name, 
+                                                        index=False, header=False, 
+                                                        startrow=row_count + 1)  # +1 for header
+                                    
+                                    row_count += len(df_chunk)
+                                    
+                                    # Belleği temizle
+                                    del df_chunk
+                                    
+                                query_count += 1
+                                results.append(f"Sorgu başarıyla çalıştırıldı ve {row_count} satır veri alındı")
                     
-                    # SELECT sorguları için sonuçları topla
-                    if clean_command.startswith('SELECT') or clean_command.startswith('WITH'):
-                        if cursor.description:
-                            output_columns.append([col[0] for col in cursor.description])
-                            output_data.append(cursor.fetchall())
-                            sheet_names.append("Sorgu Sonucu")
-                            results.append(f"Sorgu başarıyla çalıştırıldı ve veriler alındı")
-                
-                except Exception as e:
-                    # Hata durumunda rollback yap
-                    connection.rollback()
-                    results.append(f"Hata: {str(e)} - Komut: {command[:100]}...")
-
-            # Eğer veri varsa Excel dosyası oluştur
-            if output_data:
-                import pandas as pd
-                from datetime import datetime
-                
-                # Excel dosyasını kaydet
-                # SQL dosyasının adını al (uzantısız)
-                sql_filename = os.path.splitext(os.path.basename(step.file_path))[0]
-                excel_filename = f"{sql_filename}.xlsx"
-                excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
-                
-                # Excel writer oluştur
-                with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-                    # Her veri seti için ayrı sayfa oluştur
-                    for i, (data, columns, sheet_name) in enumerate(zip(output_data, output_columns, sheet_names)):
-                        # DataFrame oluştur
-                        df = pd.DataFrame(data, columns=columns)
-                        # Sayfa adını temizle (Excel'de geçersiz karakterleri kaldır)
-                        clean_sheet_name = "".join(c for c in sheet_name if c.isalnum() or c in (' ', '-', '_'))[:31]
-                        # Sayfayı yaz
-                        df.to_excel(writer, sheet_name=clean_sheet_name, index=False)
-                
-                results.append(f"Tüm çıktılar Excel dosyasına kaydedildi: {excel_filename}")
+                    except Exception as e:
+                        # Hata durumunda rollback yap
+                        connection.rollback()
+                        results.append(f"Hata: {str(e)} - Komut: {command[:100]}...")
 
             # Bağlantıyı kapat
             cursor.close()
@@ -437,8 +460,8 @@ class ProcessExecutor:
                 'status': 'success',
                 'message': 'SQL script başarıyla çalıştırıldı',
                 'output': '\n'.join(results),
-                'has_excel_output': bool(output_data),
-                'excel_filename': excel_filename if output_data else None
+                'has_excel_output': query_count > 1,  # En az bir sorgu çalıştırıldıysa
+                'excel_filename': excel_filename if query_count > 1 else None
             }
 
         except Exception as e:
