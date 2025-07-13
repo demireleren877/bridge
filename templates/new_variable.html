@@ -8,18 +8,15 @@
         box-shadow: none;
         border-color: #86b7fe;
     }
-
     .form-switch .form-check-input {
         width: 45px;
         height: 24px;
         margin-top: 0;
     }
-
     .form-switch .form-check-label {
         padding-top: 2px;
         margin-left: 10px;
     }
-
     .card-body {
         padding: 1.5rem;
     }
@@ -28,8 +25,28 @@
 <div class="container py-4">
     <div class="card">
         <div class="card-body">
-            <h2 class="card-title mb-4">Yeni Değişken Ekle</h2>
+            <h2 class="card-title mb-4">
+                {% if is_excel_import %}
+                Excel Import İşlemi Seç
+                {% else %}
+                Yeni Değişken Ekle
+                {% endif %}
+            </h2>
             <form method="POST">
+                {% if is_excel_import %}
+                <div class="mb-3">
+                    <label for="import_process_id" class="form-label">Excel Import İşlemi</label>
+                    <select class="form-select" id="import_process_id" name="import_process_id" required>
+                        <option value="">Bir excel import işlemi seçin...</option>
+                        {% for import_process in import_processes %}
+                        <option value="{{ import_process.id }}">{{ import_process.name }} ({{ import_process.file_path }})</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">
+                        Bu adım için kullanılacak excel import işlemini seçin.
+                    </small>
+                </div>
+                {% else %}
                 <div class="mb-3">
                     <label for="name" class="form-label">Değişken Adı</label>
                     <input type="text" class="form-control" id="name" name="name" required>
@@ -76,19 +93,16 @@
                     <div class="card">
                         <div class="card-body">
                             <div class="mb-3">
-                                <input type="text" class="form-control mail-input" id="mail_to"
-                                    placeholder="Alıcılar (virgülle ayırın)">
+                                <input type="text" class="form-control mail-input" id="mail_to" placeholder="Alıcılar (virgülle ayırın)">
                             </div>
                             <div class="mb-3">
-                                <input type="text" class="form-control mail-input" id="mail_cc"
-                                    placeholder="CC (virgülle ayırın)">
+                                <input type="text" class="form-control mail-input" id="mail_cc" placeholder="CC (virgülle ayırın)">
                             </div>
                             <div class="mb-3">
                                 <input type="text" class="form-control mail-input" id="mail_subject" placeholder="Konu">
                             </div>
                             <div class="mb-3">
-                                <textarea class="form-control mail-input" id="mail_body" rows="3"
-                                    placeholder="İçerik"></textarea>
+                                <textarea class="form-control mail-input" id="mail_body" rows="3" placeholder="İçerik"></textarea>
                             </div>
                             <div class="form-check form-switch">
                                 <input class="form-check-input mail-input" type="checkbox" id="mail_active">
@@ -99,13 +113,18 @@
                     </div>
                     {% else %}
                     <label for="default_value" class="form-label">Varsayılan Değer</label>
-                    <input type="text" class="form-control" id="default_value" name="default_value"
-                        placeholder="Değer girin...">
+                    <input type="text" class="form-control" id="default_value" name="default_value" placeholder="Değer girin...">
                     {% endif %}
                 </div>
-
+                {% endif %}
                 <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                    <button type="submit" class="btn btn-primary">
+                        {% if is_excel_import %}
+                        Seç
+                        {% else %}
+                        Kaydet
+                        {% endif %}
+                    </button>
                     <a href="{{ url_for('process_detail', process_id=step.process_id) }}"
                         class="btn btn-secondary">İptal</a>
                 </div>
@@ -114,8 +133,12 @@
     </div>
 </div>
 
+{% if not is_excel_import %}
 <script>
-    document.getElementById('var_type').addEventListener('change', function () {
+    document.addEventListener('DOMContentLoaded', function() {
+        const varTypeSelect = document.getElementById('var_type');
+        if (varTypeSelect) {
+            varTypeSelect.addEventListener('change', function () {
         const defaultValueContainer = document.getElementById('default-value-container');
         const defaultValueInput = document.getElementById('default_value');
 
@@ -187,10 +210,10 @@
             `;
         }
     });
+        }
 
     // Sayfa yüklendiğinde mail konfigürasyonunu JSON'a dönüştür
-    document.addEventListener('DOMContentLoaded', function () {
-        if (document.getElementById('var_type').value === 'mail_config') {
+        if (document.getElementById('var_type') && document.getElementById('var_type').value === 'mail_config') {
             const mailInputs = document.querySelectorAll('.mail-input');
             mailInputs.forEach(input => {
                 input.addEventListener('change', function () {
@@ -205,7 +228,6 @@
                 });
             });
         }
-    });
 
     // Kapsam seçimi değiştiğinde ana değişken seçimini göster/gizle
     const scopeSelect = document.getElementById('scope');
@@ -223,5 +245,7 @@
             }
         });
     }
+    });
 </script>
+{% endif %}
 {% endblock %}

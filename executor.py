@@ -1,13 +1,14 @@
+import re
 import shutil
 import subprocess
 import os
+from flask import jsonify
 import pandas as pd
 import sqlite3
 import json
 from datetime import datetime
 import platform
 import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,48 @@ IS_WINDOWS = platform.system() == 'Windows'
 if IS_WINDOWS:
     import win32com.client
     import pythoncom
+
+def convert_to_oracle_column_name(column_name):
+        """
+        Excel sütun isimlerini Oracle uyumlu formata dönüştürür.
+        - Türkçe karakterleri değiştirir
+        - Boşlukları alt çizgi ile değiştirir
+        - Özel karakterleri kaldırır
+        - Tüm harfleri büyük yapar
+        """
+        # Türkçe karakter dönüşümü
+        tr_chars = {
+            'ı': 'I', 'ğ': 'G', 'ü': 'U', 'ş': 'S', 'ö': 'O', 'ç': 'C',
+            'İ': 'I', 'Ğ': 'G', 'Ü': 'U', 'Ş': 'S', 'Ö': 'O', 'Ç': 'C',
+            'i': 'I', 'g': 'G', 'u': 'U', 's': 'S', 'o': 'O', 'c': 'C'
+        }
+        
+        # Sütun ismini dönüştür
+        column = str(column_name)
+        
+        # Türkçe karakterleri değiştir
+        for tr_char, eng_char in tr_chars.items():
+            column = column.replace(tr_char, eng_char)
+        
+        # Boşlukları ve özel karakterleri alt çizgi ile değiştir
+        column = re.sub(r'[^a-zA-Z0-9]', '_', column)
+        
+        # Birden fazla alt çizgiyi tek alt çizgiye dönüştür
+        column = re.sub(r'_+', '_', column)
+        
+        # Başındaki ve sonundaki alt çizgileri kaldır
+        column = column.strip('_')
+        
+        # Tüm harfleri büyük yap
+        column = column.upper()
+        
+        # Oracle'da geçerli bir sütun ismi oluştur
+        if not column:
+            column = 'COLUMN_' + str(hash(str(column_name)) % 10000)
+        elif column[0].isdigit():
+            column = 'COLUMN_' + column
+        
+        return column
 
 class ProcessExecutor:
     _instance = None
@@ -196,7 +239,6 @@ class ProcessExecutor:
 
             mails = []
             count = messages.Count if hasattr(messages, 'Count') else 0
-            print(f"[DEBUG] messages.Count: {count}")
 
             # Son 30 maili topla, Python'da filtrele
             for i in range(1, min(count, 30) + 1):
@@ -215,17 +257,14 @@ class ProcessExecutor:
                         'received': received_time.strftime('%Y-%m-%d %H:%M:%S'),
                         'body': message.Body[:200] + '...' if len(message.Body) > 200 else message.Body
                     }
-                    print(f"[DEBUG][INBOX] Subject: {mail_info['subject']} | Sender: {mail_info['sender']} | Received: {mail_info['received']}")
                     mails.append(mail_info)
                     if len(mails) >= 10:
                         break
                 except Exception as e:
-                    print(f"[ERROR][MAIL_LOOP] {str(e)}")
                     continue
 
             return {'success': True, 'output': mails}
         except Exception as e:
-            print(f"[ERROR][MAIL_CHECK] {str(e)}")
             return {'success': False, 'error': str(e)}
         finally:
             if IS_WINDOWS:
@@ -304,7 +343,7 @@ class ProcessExecutor:
             with open(step.file_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
 
-            # Değişkenleri kontrol et ve değerlerini yerleştir
+             # Değişkenleri kontrol et ve değerlerini yerleştir
             if step.variables:
                 for variable in step.variables:
                     param_name = f"&{variable.name}"
@@ -316,7 +355,7 @@ class ProcessExecutor:
                             sql_content = sql_content.replace(param_name, value)
                         elif variable.var_type == 'date':
                             # Tarih değerleri için TO_DATE fonksiyonu kullan
-                            sql_content = sql_content.replace(param_name, f"TO_DATE('{value}', 'YYYY-MM-DD')")
+                            sql_content = sql_content.replace(param_name, f"TO_DATE('{value}', 'DD.MM.YYYY')")
                         else:  # text
                             # Metin değerleri için tırnak kullan
                             sql_content = sql_content.replace(param_name, f"'{value}'")
@@ -330,18 +369,23 @@ class ProcessExecutor:
             )
             cursor = connection.cursor()
 
-            # SQL komutlarını ayır
-            # Önce her satırı ayrı ayrı al
+            # SQL komutlarını ve yorum satırlarını ayır
             lines = sql_content.split('\n')
             current_command = []
             commands = []
+            command_comments = []  # Her komut için yorum satırını sakla
+            current_comment = ""
             
             for line in lines:
                 # Satırı temizle
                 line = line.strip()
                 
-                # Yorum satırlarını atla
+                # Yorum satırlarını kontrol et
                 if line.startswith('--'):
+                    # Yorum satırındaki metni al (-- işaretini kaldır)
+                    comment_text = line[2:].strip()
+                    if comment_text:
+                        current_comment = comment_text
                     continue
                     
                 # Boş satırları atla
@@ -356,121 +400,288 @@ class ProcessExecutor:
                     # Komutu birleştir ve noktalı virgülü kaldır
                     command = ' '.join(current_command).rstrip(';')
                     commands.append(command)
+                    command_comments.append(current_comment)
                     current_command = []
-
+                    current_comment = ""
+            
             # Eğer son komut noktalı virgül ile bitmiyorsa, onu da ekle
             if current_command:
                 command = ' '.join(current_command).rstrip(';')
                 commands.append(command)
+                command_comments.append(current_comment)
 
             # Her komutu ayrı ayrı çalıştır
             results = []
-            query_count = 1
-            
-            # Excel dosyasını hazırla
-            import pandas as pd
-            from datetime import datetime
-            
-            # SQL dosyasının adını al (uzantısız)
-            sql_filename = os.path.splitext(os.path.basename(step.file_path))[0]
-            excel_filename = f"{sql_filename}.xlsx"
-            excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
-            
-            # Excel writer oluştur
-            with pd.ExcelWriter(excel_path, engine='openpyxl', mode='w') as writer:
-                for command in commands:
-                    try:
-                        # Komutu temizle ve büyük harfe çevir (kontrol için)
-                        clean_command = command.strip().upper()
-                        
-                        # Komutu çalıştır
-                        cursor.execute(command)
-                        
-                        # DDL komutları için otomatik commit
-                        if any(clean_command.startswith(ddl) for ddl in ['CREATE', 'DROP', 'ALTER', 'TRUNCATE']):
-                            connection.commit()
-                            results.append(f"DDL komutu başarıyla çalıştırıldı: {command[:100]}...")
-                        else:
-                            # DML komutları için etkilenen satır sayısını kontrol et
-                            if cursor.rowcount > 0:
-                                results.append(f"{cursor.rowcount} satır etkilendi")
-                                connection.commit()
-                        
-                        # SELECT sorguları için sonuçları topla
-                        if clean_command.startswith('SELECT') or clean_command.startswith('WITH'):
-                            if cursor.description:
-                                # Sütun isimlerini al
-                                columns = [col[0] for col in cursor.description]
-                                
-                                # Sayfa adını oluştur
-                                sheet_name = f"Sorgu {query_count}"
-                                clean_sheet_name = "".join(c for c in sheet_name if c.isalnum() or c in (' ', '-', '_'))[:31]
-                                
-                                # Chunk size'ı belirle (örn: 10000 satır)
-                                chunk_size = 10000
-                                first_chunk = True
-                                row_count = 0
-                                
-                                while True:
-                                    # Chunk'ı al
-                                    rows = cursor.fetchmany(chunk_size)
-                                    if not rows:
-                                        break
-                                        
-                                    # NumPy array'e çevir (daha hızlı)
-                                    data = np.array(rows)
-                                    
-                                    # DataFrame oluştur
-                                    df_chunk = pd.DataFrame(data, columns=columns)
-                                    
-                                    # Excel'e yaz
-                                    if first_chunk:
-                                        df_chunk.to_excel(writer, sheet_name=clean_sheet_name, index=False)
-                                        first_chunk = False
-                                    else:
-                                        # Mevcut sayfaya ekle
-                                        df_chunk.to_excel(writer, sheet_name=clean_sheet_name, 
-                                                        index=False, header=False, 
-                                                        startrow=row_count + 1)  # +1 for header
-                                    
-                                    row_count += len(df_chunk)
-                                    
-                                    # Belleği temizle
-                                    del df_chunk
-                                    
-                                query_count += 1
-                                results.append(f"Sorgu başarıyla çalıştırıldı ve {row_count} satır veri alındı")
-                    
-                    except Exception as e:
-                        # Hata durumunda rollback yap
-                        connection.rollback()
-                        results.append(f"Hata: {str(e)} - Komut: {command[:100]}...")
+            excel_files = []  # Oluşturulan Excel dosyalarını sakla
+            timeline = []  # Timeline bilgilerini sakla
 
-            # Bağlantıyı kapat
+            # Log dosyası yolunu belirle
+            log_file_path = os.path.join(ProcessExecutor._db_path.replace('processes.db', ''), f'step_{step.id}_logs.json')
+            
+            # Başlangıçta boş log dosyası oluştur
+            with open(log_file_path, 'w', encoding='utf-8') as f:
+                json.dump([], f, ensure_ascii=False, indent=2)
+
+            for i, (command, comment) in enumerate(zip(commands, command_comments)):
+                # Timeline başlangıç zamanı
+                start_time = datetime.now()
+                query_name = comment if comment else f"Sorgu_{i+1}"
+                
+                try:
+                    # Komutu temizle ve büyük harfe çevir (kontrol için)
+                    clean_command = command.strip().upper()
+                    
+                    # Komutu çalıştır
+                    cursor.execute(command)
+                    
+                    # Timeline bitiş zamanı
+                    end_time = datetime.now()
+                    duration = (end_time - start_time).total_seconds()
+                    
+                    # DDL komutları için otomatik commit
+                    if any(clean_command.startswith(ddl) for ddl in ['CREATE', 'DROP', 'ALTER', 'TRUNCATE']):
+                        connection.commit()
+                        results.append(f"DDL komutu başarıyla çalıştırıldı: {command[:100]}...")
+                        timeline.append({
+                        'query_name': query_name,
+                        'start_time': start_time.strftime('%H:%M:%S'),
+                        'end_time': end_time.strftime('%H:%M:%S'),
+                        'duration': f"{duration:.2f}s",
+                        'status': 'success',
+                        'type': 'DDL',
+                        'query': command
+                    })
+                    
+                        # Logları gerçek zamanlı güncelle
+                        try:
+                            with open(log_file_path, 'r', encoding='utf-8') as f:
+                                logs = json.load(f)
+                            
+                            log_entry = {
+                                'query_name': query_name,
+                                'start_time': start_time.strftime('%H:%M:%S'),
+                                'end_time': end_time.strftime('%H:%M:%S'),
+                                'duration': f"{duration:.2f}s",
+                                'status': 'success',
+                                'affected_rows': 0,
+                                'error': ''
+                            }
+                            logs.append(log_entry)
+                            
+                            with open(log_file_path, 'w', encoding='utf-8') as f:
+                                json.dump(logs, f, ensure_ascii=False, indent=2)
+                        except Exception as log_error:
+                            print(f"Log güncelleme hatası: {log_error}")
+                    
+                        # DML komutları için etkilenen satır sayısını kontrol et    
+                    elif cursor.rowcount > 0:
+                            results.append(f"{cursor.rowcount} satır etkilendi")
+                            connection.commit()
+                            timeline.append({
+                                'query_name': query_name,
+                                'start_time': start_time.strftime('%H:%M:%S'),
+                                'end_time': end_time.strftime('%H:%M:%S'),
+                                'duration': f"{duration:.2f}s",
+                                'status': 'success',
+                                'type': 'DML',
+                                'affected_rows': cursor.rowcount,
+                                'query': command
+                            })
+                            
+                            # Logları gerçek zamanlı güncelle
+                            try:
+                                with open(log_file_path, 'r', encoding='utf-8') as f:
+                                    logs = json.load(f)
+                                
+                                log_entry = {
+                                    'query_name': query_name,
+                                    'start_time': start_time.strftime('%H:%M:%S'),
+                                    'end_time': end_time.strftime('%H:%M:%S'),
+                                    'duration': f"{duration:.2f}s",
+                                    'status': 'success',
+                                    'affected_rows': cursor.rowcount,
+                                    'error': ''
+                                }
+                                logs.append(log_entry)
+                                
+                                with open(log_file_path, 'w', encoding='utf-8') as f:
+                                    json.dump(logs, f, ensure_ascii=False, indent=2)
+                            except Exception as log_error:
+                                print(f"Log güncelleme hatası: {log_error}")
+                    
+                    # Diğer DML sorguları için (rowcount = 0 olanlar)
+                    elif not (clean_command.startswith('SELECT') or clean_command.startswith('WITH')):
+                        # Diğer DML sorguları için log ekle
+                        timeline.append({
+                            'query_name': query_name,
+                            'start_time': start_time.strftime('%H:%M:%S'),
+                            'end_time': end_time.strftime('%H:%M:%S'),
+                            'duration': f"{duration:.2f}s",
+                            'status': 'success',
+                            'type': 'DML',
+                            'affected_rows': 0,
+                            'query': command
+                        })
+                        
+                        # Logları gerçek zamanlı güncelle
+                        try:
+                            with open(log_file_path, 'r', encoding='utf-8') as f:
+                                logs = json.load(f)
+                            
+                            log_entry = {
+                                'query_name': query_name,
+                                'start_time': start_time.strftime('%H:%M:%S'),
+                                'end_time': end_time.strftime('%H:%M:%S'),
+                                'duration': f"{duration:.2f}s",
+                                'status': 'success',
+                                'affected_rows': 0,
+                                'error': ''
+                            }
+                            logs.append(log_entry)
+                            
+                            with open(log_file_path, 'w', encoding='utf-8') as f:
+                                json.dump(logs, f, ensure_ascii=False, indent=2)
+                        except Exception as log_error:
+                            print(f"Log güncelleme hatası: {log_error}")
+                    
+                    # SELECT sorguları için sonuçları topla ve ayrı Excel dosyası oluştur
+                    if (clean_command.startswith('SELECT') or clean_command.startswith('WITH')) and cursor.description:
+                            # Verileri al
+                            data = cursor.fetchall()
+                            columns = [col[0] for col in cursor.description]
+                            
+                            # DataFrame oluştur
+                            df = pd.DataFrame(data, columns=columns)
+                            
+                            # Excel dosya adını belirle
+                            if comment:
+                                # Yorum satırından dosya adını al
+                                # Geçersiz karakterleri temizle
+                                safe_filename = "".join(c for c in comment if c.isalnum() or c in (' ', '-', '_', '.'))
+                                safe_filename = safe_filename.strip()
+                                if not safe_filename:
+                                    safe_filename = f"Sorgu_{i+1}"
+                            else:
+                                safe_filename = f"Sorgu_{i+1}"
+                            
+                            # Excel dosyasını oluştur
+                            excel_filename = f"{safe_filename}.xlsx"
+                            excel_path = os.path.join(os.environ['USERPROFILE'], 'Downloads', excel_filename)
+                            
+                            # Dosya adı çakışmasını önle
+                            counter = 1
+                            original_path = excel_path
+                            while os.path.exists(excel_path):
+                                name_without_ext = os.path.splitext(original_path)[0]
+                                excel_path = f"{name_without_ext}_{counter}.xlsx"
+                                counter += 1
+                            
+                            # Excel dosyasını kaydet
+                            df.to_excel(excel_path, index=False)
+                            excel_files.append(excel_filename)
+                            
+                            results.append(f"Sorgu başarıyla çalıştırıldı ve {len(data)} satır veri {excel_filename} dosyasına kaydedildi")
+                            
+                            # Timeline'ı güncelle
+                            for timeline_item in timeline:
+                                if timeline_item['query_name'] == query_name:
+                                    timeline_item['type'] = 'SELECT'
+                                    timeline_item['result_rows'] = len(data)
+                                    timeline_item['excel_file'] = excel_filename
+                                    break
+                            
+                            # SELECT sorguları için log entry'si oluştur ve güncelle
+                            try:
+                                with open(log_file_path, 'r', encoding='utf-8') as f:
+                                    logs = json.load(f)
+                                
+                                # SELECT sorgusu için yeni log entry'si oluştur
+                                log_entry = {
+                                    'query_name': query_name,
+                                    'start_time': start_time.strftime('%H:%M:%S'),
+                                    'end_time': end_time.strftime('%H:%M:%S'),
+                                    'duration': f"{duration:.2f}s",
+                                    'status': 'success',
+                                    'affected_rows': 0,
+                                    'result_rows': len(data),
+                                    'excel_file': excel_filename,
+                                    'error': ''
+                                }
+                                logs.append(log_entry)
+                                
+                                with open(log_file_path, 'w', encoding='utf-8') as f:
+                                    json.dump(logs, f, ensure_ascii=False, indent=2)
+                            except Exception as log_error:
+                                print(f"Log güncelleme hatası: {log_error}")
+                
+                except Exception as e:
+                    # Hata durumunda rollback yap
+                    connection.rollback()
+                    end_time = datetime.now()
+                    duration = (end_time - start_time).total_seconds()
+                    
+                    results.append(f"Hata: {str(e)} - Komut: {command[:100]}...")
+                    timeline.append({
+                        'query_name': query_name,
+                        'start_time': start_time.strftime('%H:%M:%S'),
+                        'end_time': end_time.strftime('%H:%M:%S'),
+                        'duration': f"{duration:.2f}s",
+                        'status': 'error',
+                        'error_message': str(e),
+                        'query': command
+                    })
+                    
+                    # Logları gerçek zamanlı güncelle (hata durumu)
+                    try:
+                        with open(log_file_path, 'r', encoding='utf-8') as f:
+                            logs = json.load(f)
+                        
+                        log_entry = {
+                            'query_name': query_name,
+                            'start_time': start_time.strftime('%H:%M:%S'),
+                            'end_time': end_time.strftime('%H:%M:%S'),
+                            'duration': f"{duration:.2f}s",
+                            'status': 'error',
+                            'affected_rows': 0,
+                            'error': str(e)
+                        }
+                        logs.append(log_entry)
+                        
+                        with open(log_file_path, 'w', encoding='utf-8') as f:
+                            json.dump(logs, f, ensure_ascii=False, indent=2)
+                    except Exception as log_error:
+                        print(f"Log güncelleme hatası: {log_error}")
+                    
+                    # Hata durumunda bağlantıyı kapat ve işlemi durdur
+                    cursor.close()
+                    connection.close()
+                    
+                    return {
+                        'status': 'error',
+                        'message': f'SQL script çalıştırılırken hata oluştu: {str(e)}',
+                        'output': '\n'.join(results),
+                        'has_excel_output': bool(excel_files),
+                        'excel_files': excel_files,
+                        'timeline': timeline
+                    }
+
+            # Değişiklikleri kaydet
+            connection.commit()
             cursor.close()
             connection.close()
-
-            # Adımın durumunu güncelle
-            from app import db
-            step.status = 'completed'
-            step.completed_at = datetime.now()
-            db.session.commit()
-
+            
+            # Loglar zaten gerçek zamanlı olarak kaydedildiği için burada tekrar kaydetmeye gerek yok
+           
             return {
                 'status': 'success',
                 'message': 'SQL script başarıyla çalıştırıldı',
                 'output': '\n'.join(results),
-                'has_excel_output': query_count > 1,  # En az bir sorgu çalıştırıldıysa
-                'excel_filename': excel_filename if query_count > 1 else None
+                'has_excel_output': bool(excel_files),
+                'excel_files': excel_files,
+                'timeline': timeline
             }
 
         except Exception as e:
-            # Hata durumunda adımın durumunu güncelle
-            from app import db
-            step.status = 'failed'
-            step.error_message = str(e)
-            db.session.commit()
-            
             return {
                 'status': 'error',
                 'message': f'SQL script çalıştırılırken hata oluştu: {str(e)}'
@@ -525,13 +736,16 @@ class ProcessExecutor:
                 'error': None
             } 
 
+
+
+
     @staticmethod
     def execute_import_process(import_process):
+        
         """Excel import process'ini çalıştırır"""
         try:
             # Excel dosyasını oku
             df = pd.read_excel(import_process.file_path, sheet_name=import_process.sheet_name)
-            
             # Oracle bağlantısını oluştur
             import oracledb
             connection = oracledb.connect(
@@ -543,39 +757,54 @@ class ProcessExecutor:
             
             # Kolon eşleştirmelerini al
             column_mappings = json.loads(import_process.column_mappings)
-            
-            # Verileri Oracle'a aktar
-            if import_process.import_mode == 'append':
-                # Mevcut tabloya ekle
-                oracle_columns = [mapping['oracle_column'] for mapping in column_mappings]
-                excel_columns = [mapping['excel_column'] for mapping in column_mappings]
-                placeholders = [f":{i+1}" for i in range(len(oracle_columns))]
-                insert_sql = f"INSERT INTO {import_process.table_name} ({', '.join(oracle_columns)}) VALUES ({', '.join(placeholders)})"
-                
-                for _, row in df.iterrows():
-                    values = [row[excel_col] for excel_col in excel_columns]
-                    cursor.execute(insert_sql, values)
-            
-            elif import_process.import_mode == 'replace':
-                # Tabloyu temizle ve yeniden oluştur
-                cursor.execute(f"DROP TABLE {import_process.table_name}")
-                
+
+            if import_process.create_new_table:
                 # Yeni tablo oluştur
                 create_table_sql = f"CREATE TABLE {import_process.table_name} ("
                 for mapping in column_mappings:
-                    create_table_sql += f"{mapping['oracle_column']} VARCHAR2(4000), "
+                    create_table_sql += f"{mapping['oracle_column']} {mapping['oracle_type']}, "
                 create_table_sql = create_table_sql.rstrip(", ") + ")"
                 cursor.execute(create_table_sql)
                 
-                # Verileri ekle
-                oracle_columns = [mapping['oracle_column'] for mapping in column_mappings]
-                excel_columns = [mapping['excel_column'] for mapping in column_mappings]
-                placeholders = [f":{i+1}" for i in range(len(oracle_columns))]
-                insert_sql = f"INSERT INTO {import_process.table_name} ({', '.join(oracle_columns)}) VALUES ({', '.join(placeholders)})"
+            elif import_process.import_mode == 'replace':
+                try:
+                    # Tabloyu temizle
+                    cursor.execute(f"TRUNCATE TABLE {import_process.table_name}")
+                    connection.commit()
+                except oracledb.DatabaseError as e:
+                    error, = e.args
+                    return jsonify({
+                        'success': False,
+                        'error': f'Tablo temizlenirken hata: {error.message}'
+                })            
+            
                 
-                for _, row in df.iterrows():
-                    values = [row[excel_col] for excel_col in excel_columns]
-                    cursor.execute(insert_sql, values)
+            columns = list(df.columns)
+            placeholders = ','.join([':' + str(i+1) for i in range(len(columns))])        
+            insert_query = f"INSERT INTO {import_process.table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+            # Verileri Oracle'a aktar
+            data_to_insert = []
+
+            for _,row in df.iterrows():
+                row_data =[]
+                for col in columns:
+                    value = row[col]
+                    if pd.isna(value):
+                        row_data.append(None)
+                    elif isinstance(value,pd.Timestamp):
+                        row_data.append(value.to_pydatetime())
+                    else:
+                        row_data.append(value)
+                data_to_insert.append(row_data)
+            
+            try:
+                cursor.executemany(insert_query, data_to_insert)
+            except oracledb.DatabaseError as e:
+                error, = e.args
+                return jsonify({
+                    'success': False, 
+                    'error': f'Veri aktarımı sırasında hata: {error.message}.'
+                })
             
             connection.commit()
             cursor.close()
@@ -594,3 +823,5 @@ class ProcessExecutor:
                 'status': 'error',
                 'message': f'Excel import sırasında hata oluştu: {str(e)}'
             } 
+    
+    

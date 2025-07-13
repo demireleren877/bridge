@@ -8,3 +8,6 @@ Flask-Migrate==4.0.5
 Flask-CORS==4.0.0
 cx_Oracle==8.3.0
 python-dotenv==1.0.1 
+numpy==1.24.3
+plotly==5.17.0
+chainladder==0.8.16 

@@ -103,12 +103,11 @@
             <table class="table table-hover mb-0" >
                 <thead>
                     <tr>
-                        <th style="width: 8%">Sıra</th>
-                        <th style="width: 35%">Adım Adı</th>
-                        <th style="width: 15%">Sorumlu</th>
-                        <th style="width: 15%">Reviewer</th>
+                        <th style="width: 10%">Sıra</th>
+                        <th style="width: 40%">Adım Adı</th>
+                        <th style="width: 20%">Sorumlu</th>
                         <th style="width: 5%">Deadline</th>
-                        <th style="width: 12%">Durum</th>
+                        <th style="width: 15%">Durum</th>
                         <th style="width: 10%">İşlemler</th>
                     </tr>
                 </thead>
@@ -120,7 +119,7 @@
                         data-completed-at="{{ step.completed_at|format_datetime if step.completed_at else '' }}"
                         data-completed-at-iso="{{ step.completed_at.strftime('%Y-%m-%d') if step.completed_at else '' }}"
                         data-description="{{ step.description or '' }}" data-step-name="{{ step.name }}"
-                        data-responsible="{{ step.responsible or '' }}" data-reviewer="{{ step.reviewer or '' }}" data-status="{{ step.status }}"
+                        data-responsible="{{ step.responsible or '' }}" data-status="{{ step.status }}"
                         data-deadline="{{ step.deadline.strftime('%Y-%m-%dT%H:%M') if step.deadline else '' }}">
                         <td>
                             <div class="d-flex align-items-center">
@@ -145,7 +144,8 @@
                                         <button type="button" class="btn btn-sm btn-outline-secondary show-variables"
                                             data-step-id="{{ step.id }}">
                                             <i class="bi bi-chevron-right me-1"></i> Değişkenler (<span
-                                                class="variable-count">{% if step.type == 'excel_import' %}{{ 1 if step.import_process_id else 0 }}{% else %}{{ step.variables|length }}{% endif %}</span>)
+                                                class="variable-count">{{
+                                                step.variables|length }}</span>)
                                         </button>
                                         <a href="{{ url_for('new_variable', step_id=step.id) }}"
                                             class="btn btn-sm btn-outline-secondary">
@@ -240,14 +240,6 @@
                                     'Sorumlu ekle...' }}</span>
                                 <input type="text" class="form-control form-control-sm step-responsible-input d-none"
                                     value="{{ step.responsible }}" data-step-id="{{ step.id }}">
-                            </div>
-                        </td>
-                        <td>
-                            <div class="step-reviewer-container">
-                                <span class="step-reviewer" data-step-id="{{ step.id }}">{{ step.reviewer or
-                                    'Reviewer ekle...' }}</span>
-                                <input type="text" class="form-control form-control-sm step-reviewer-input d-none"
-                                    value="{{ step.reviewer }}" data-step-id="{{ step.id }}">
                             </div>
                         </td>
                         <td>
@@ -379,14 +371,7 @@
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label class="form-label">Reviewer</label>
-                                <input type="text" class="form-control" id="modalStepReviewerInput"
-                                    name="reviewer">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <div class="form-group">
                                 <label class="form-label">Deadline</label>
                                 <input type="datetime-local" class="form-control" id="modalStepDeadlineInput"
@@ -394,26 +379,12 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="row mb-3">
                         <div class="col-12">
                             <div class="form-group">
                                 <label class="form-label">Açıklama</label>
                                 <textarea class="form-control" id="modalStepDescriptionInput" name="description"
                                     rows="3"></textarea>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Dosya Yolu Alanı - Sadece belirli adım tipleri için göster -->
-                    <div class="row mb-3" id="filePathRow" style="display: none;">
-                        <div class="col-12">
-                            <div class="form-group">
-                                <label class="form-label" id="filePathLabel">Dosya Yolu</label>
-                                <input type="text" class="form-control" id="modalStepFilePathInput" name="file_path">
-                                <small class="form-text text-muted" id="filePathHelp">
-                                    <!-- Yardım metni dinamik olarak doldurulacak -->
-                                </small>
                             </div>
                         </div>
                     </div>
@@ -448,7 +419,25 @@
     </div>
 </div>
 
-
+<!-- Timeline Modalı -->
+<div class="modal fade" id="timelineModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">SQL Script Çalışma Zaman Çizelgesi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="timelineContent">
+                    <!-- Timeline içeriği buraya yüklenecek -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Değişkenler Modalı -->
 <div class="modal fade" id="variablesModal" tabindex="-1">
@@ -479,7 +468,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Adım Çalışma Logları</h5>
+                <h5 class="modal-title">SQL Script Çalışma Zaman Çizelgesi</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -600,20 +589,21 @@
         background-color: inherit !important;
     }
 
-    /* Bootstrap hover efektlerini düzelt */
+    /* Bootstrap hover efektlerini kaldır */
     .table-hover > tbody > tr:hover > td,
     .table-hover > tbody > tr:hover > th {
-        background-color: var(--bs-gray-100) !important;
+        background-color: inherit !important;
     }
 
-    [data-bs-theme="dark"] .table-hover > tbody > tr:hover > td,
-    [data-bs-theme="dark"] .table-hover > tbody > tr:hover > th {
-        background-color: var(--bs-gray-800) !important;
+    /* Tüm hover efektlerini kaldır */
+    *:hover {
+        transition: none !important;
     }
 
     /* Card ve timeline item'lar için özel kural */
     .card,
-    .timeline-item {
+    .timeline-item,
+    .table-hover tbody tr {
         transition: none !important;
     }
 
@@ -933,33 +923,15 @@
     }
 
     .step-content {
-        /* pointer-events: none; - Bu satırı kaldırdık */
+        pointer-events: none;
     }
 
     .action-buttons {
-        /* pointer-events: auto; - Bu satırı kaldırdık */
+        pointer-events: auto;
     }
 
     .show-step-details {
         cursor: pointer !important;
-    }
-
-    /* Tablo satır hover efektini düzelt */
-    .table-hover tbody tr {
-        transition: background-color 0.2s ease;
-    }
-
-    .table-hover tbody tr:hover {
-        background-color: var(--bs-gray-100) !important;
-    }
-
-    [data-bs-theme="dark"] .table-hover tbody tr:hover {
-        background-color: var(--bs-gray-800) !important;
-    }
-
-    /* Tüm tablo hücrelerinin hover efektini sağla */
-    .table-hover tbody tr:hover td {
-        background-color: inherit !important;
     }
 
     /* Saving Indicator Style */
@@ -1012,63 +984,6 @@
     }
 </style>
 <script>
-    // Popup kuyruk sistemi
-    class PopupQueue {
-        constructor() {
-            this.queue = [];
-            this.isShowing = false;
-        }
-
-        add(popupData) {
-            this.queue.push(popupData);
-            this.processQueue();
-        }
-
-        processQueue() {
-            if (this.isShowing || this.queue.length === 0) {
-                return;
-            }
-
-            this.isShowing = true;
-            const popupData = this.queue.shift();
-            this.showPopup(popupData);
-        }
-
-        showPopup(popupData) {
-            const { type, title, message, data } = popupData;
-            
-            if (type === 'result') {
-                const resultSuccess = document.getElementById('resultSuccess');
-                const resultError = document.getElementById('resultError');
-                const resultModal = document.getElementById('resultModal');
-
-                if (resultSuccess && resultError && resultModal) {
-                    if (data.success) {
-                        resultSuccess.textContent = message;
-                        resultSuccess.classList.remove('d-none');
-                        resultError.classList.add('d-none');
-                    } else {
-                        resultError.textContent = message;
-                        resultError.classList.remove('d-none');
-                        resultSuccess.classList.add('d-none');
-                    }
-
-                    const modal = new bootstrap.Modal(resultModal);
-                    modal.show();
-
-                    // Modal kapandığında kuyruğu işlemeye devam et
-                    resultModal.addEventListener('hidden.bs.modal', () => {
-                        this.isShowing = false;
-                        this.processQueue();
-                    }, { once: true });
-                }
-            }
-        }
-    }
-
-    // Global popup kuyruğu oluştur
-    const popupQueue = new PopupQueue();
-
     document.addEventListener('DOMContentLoaded', () => {
         initializeMailCards();
         initializeProcessStartButton();
@@ -1160,13 +1075,21 @@
                 if (status === 'done') {
                     updateStepStatus(stepId, 'done', 'Tamamlandı');
                     button.innerHTML = originalButton;
-                    // Sonuç modalını kuyruğa ekle
-                    popupQueue.add({
-                        type: 'result',
-                        title: 'İşlem Tamamlandı',
-                        message: 'İşlem başarıyla tamamlandı.',
-                        data: { success: true }
-                    });
+                    // Sonuç modalını göster
+                    const resultSuccess = document.getElementById('resultSuccess');
+                    const resultError = document.getElementById('resultError');
+                    if (resultSuccess && resultError) {
+                        let outputMessage ='İşlem başarıyla tamamlandı.';
+                        resultSuccess.textContent = outputMessage;
+                        resultSuccess.classList.remove('d-none');
+                        resultError.classList.add('d-none');
+                        const resultModal = document.getElementById('resultModal');
+                        if (resultModal) {
+                            new bootstrap.Modal(resultModal).show();
+                        }
+                        
+                    }
+                    
                 }
                 break;
             }
@@ -1266,53 +1189,84 @@
                             }
                         });
 
-                        // Sonuç modalını kuyruğa ekle
-                        popupQueue.add({
-                            type: 'result',
-                            title: 'Mail Gönderimi',
-                            message: 'Mail başarıyla gönderildi',
-                            data: { success: true }
-                        });
+                        // Sonuç modalını göster
+                        const resultSuccess = document.getElementById('resultSuccess');
+                        const resultError = document.getElementById('resultError');
+
+                        if (resultSuccess && resultError) {
+                            resultSuccess.textContent = 'Mail başarıyla gönderildi';
+                            resultSuccess.classList.remove('d-none');
+                            resultError.classList.add('d-none');
+
+                            const resultModal = document.getElementById('resultModal');
+                            if (resultModal) {
+                                new bootstrap.Modal(resultModal).show();
+                            }
+                        }
                     } else {
                         // Mail tipi değilse tamamlandı olarak işaretle
                         updateStepStatus(stepId, 'done', 'Tamamlandı');
 
                         console.log(result)
                         
-                        // Timeline bilgileri artık gösterilmiyor
-                        
-                        // Excel dosyaları oluşturulduğunu belirt
-                            let outputMessage = result.output || 'İşlem başarıyla tamamlandı.';
-                        if (result.has_excel_output && result.excel_files && result.excel_files.length > 0) {
-                            outputMessage += `\n\n${result.excel_files.length} adet Excel dosyası Downloads klasörüne kaydedildi.`;
+                        // Timeline bilgilerini göster (SQL script için)
+                        if (stepType === 'sql_script' && result.timeline && result.timeline.length > 0) {
+                            showTimeline(result.timeline);
+                            
+                            // Log modalını otomatik aç
+                            setTimeout(() => {
+                                showStepLogs(stepId);
+                            }, 500);
                         }
                         
-                        // Sonuç modalını kuyruğa ekle
-                        popupQueue.add({
-                            type: 'result',
-                            title: 'İşlem Tamamlandı',
-                            message: outputMessage,
-                            data: { success: true }
-                        });
+                        // Excel dosyaları oluşturulduğunu belirt
+                        if (result.has_excel_output && result.excel_files && result.excel_files.length > 0) {
+                            let outputMessage = result.output || 'İşlem başarıyla tamamlandı.';
+                            outputMessage += `\n\n${result.excel_files.length} adet Excel dosyası Downloads klasörüne kaydedildi.`;
+                            resultSuccess.textContent = outputMessage;
+                        } else {
+                            let outputMessage = result.output || 'İşlem başarıyla tamamlandı.';
+                            resultSuccess.textContent = outputMessage;
+                        }
+                        
+                        resultSuccess.classList.remove('d-none');
+                        resultError.classList.add('d-none');
+
+                        const resultModal = document.getElementById('resultModal');
+                        if (resultModal) {
+                            new bootstrap.Modal(resultModal).show();
+                        }
                     }
                 } else {
-                    // Hata modalını kuyruğa ekle
-                    popupQueue.add({
-                        type: 'result',
-                        title: 'Hata',
-                        message: `Hata: ${result.error || result.message || 'Bilinmeyen bir hata oluştu'}`,
-                        data: { success: false }
-                    });
+                    const resultError = document.getElementById('resultError');
+                    const resultSuccess = document.getElementById('resultSuccess');
+
+                    if (resultError && resultSuccess) {
+                        resultError.textContent = `Hata: ${result.error || result.message || 'Bilinmeyen bir hata oluştu'}`;
+                        resultError.classList.remove('d-none');
+                        resultSuccess.classList.add('d-none');
+
+                        const resultModal = document.getElementById('resultModal');
+                        if (resultModal) {
+                            new bootstrap.Modal(resultModal).show();
+                        }
+                    }
                 }
             } catch (error) {
                 console.error('Adım çalıştırılırken hata oluştu:', error);
-                // Hata modalını kuyruğa ekle
-                popupQueue.add({
-                    type: 'result',
-                    title: 'Hata',
-                    message: `Hata: ${error.message || 'Bilinmeyen bir hata oluştu'}`,
-                    data: { success: false }
-                });
+                const resultError = document.getElementById('resultError');
+                const resultSuccess = document.getElementById('resultSuccess');
+
+                if (resultError && resultSuccess) {
+                    resultError.textContent = `Hata: ${error.message || 'Bilinmeyen bir hata oluştu'}`;
+                    resultError.classList.remove('d-none');
+                    resultSuccess.classList.add('d-none');
+
+                    const resultModal = document.getElementById('resultModal');
+                    if (resultModal) {
+                        new bootstrap.Modal(resultModal).show();
+                    }
+                }
             } finally {
                 button.disabled = false;
                 button.innerHTML = originalIcon;
@@ -1320,7 +1274,99 @@
         });
     });
 
-
+    // Timeline gösterim fonksiyonu
+    function showTimeline(timeline) {
+        const timelineContent = document.getElementById('timelineContent');
+        if (!timelineContent) return;
+        
+        let html = '<div class="timeline-container">';
+        
+        timeline.forEach((item, index) => {
+            const statusClass = item.status === 'success' ? 'success' : 'error';
+            const statusIcon = item.status === 'success' ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+            const statusColor = item.status === 'success' ? 'text-success' : 'text-danger';
+            
+            html += `
+                <div class="timeline-item mb-3 p-3 border rounded ${statusClass === 'success' ? 'border-success' : 'border-danger'}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">
+                                <i class="bi ${statusIcon} ${statusColor} me-2"></i>
+                                ${item.query_name}
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <small class="text-muted">Başlangıç:</small><br>
+                                    <strong>${item.start_time}</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">Bitiş:</small><br>
+                                    <strong>${item.end_time}</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">Süre:</small><br>
+                                    <strong>${item.duration}</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">Tip:</small><br>
+                                    <span class="badge bg-primary">${item.type}</span>
+                                </div>
+                            </div>
+            `;
+            
+            // Ek bilgiler
+            if (item.type === 'DML' && item.affected_rows !== undefined) {
+                html += `
+                    <div class="mt-2">
+                        <small class="text-muted">Etkilenen Satır:</small>
+                        <strong>${item.affected_rows}</strong>
+                    </div>
+                `;
+            }
+            
+            if (item.type === 'SELECT' && item.result_rows !== undefined) {
+                html += `
+                    <div class="mt-2">
+                        <small class="text-muted">Sonuç Satırı:</small>
+                        <strong>${item.result_rows}</strong>
+                    </div>
+                `;
+            }
+            
+            if (item.excel_file) {
+                html += `
+                    <div class="mt-2">
+                        <small class="text-muted">Excel Dosyası:</small>
+                        <strong>${item.excel_file}</strong>
+                    </div>
+                `;
+            }
+            
+            if (item.status === 'error' && item.error_message) {
+                html += `
+                    <div class="mt-2">
+                        <small class="text-danger">Hata:</small>
+                        <div class="text-danger">${item.error_message}</div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        timelineContent.innerHTML = html;
+        
+        // Timeline modalını göster
+        const timelineModal = document.getElementById('timelineModal');
+        if (timelineModal) {
+            new bootstrap.Modal(timelineModal).show();
+        }
+    }
 
     // Adım durumunu güncelleme fonksiyonu
     function updateStepStatus(stepId, status, text) {
@@ -1658,19 +1704,23 @@
     });
 
     function initializeModal() {
+        // Debug için konsol mesajı
         console.log('Initializing modal...');
 
+        // Modal elementini al
         const modalElement = document.getElementById('stepDetailModal');
         if (!modalElement) {
             console.error('Modal element not found!');
             return;
         }
 
+        // Bootstrap'i kontrol et
         if (typeof bootstrap === 'undefined') {
             console.error('Bootstrap is not loaded!');
             return;
         }
 
+        // Modal nesnesini oluştur
         const modal = new bootstrap.Modal(modalElement);
 
         // Adım detayı butonlarına event listener ekle
@@ -1678,11 +1728,6 @@
             button.addEventListener('click', function () {
                 const stepId = this.dataset.stepId;
                 const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
-
-                if (!row) {
-                    console.error('Row not found for step:', stepId);
-                    return;
-                }
 
                 // Modal'a step ID'sini ekle
                 modalElement.dataset.stepId = stepId;
@@ -1693,36 +1738,13 @@
                 document.getElementById('modalStepNameInput').value = row.dataset.stepName;
                 document.getElementById('modalStepDescriptionInput').value = row.dataset.description;
                 document.getElementById('modalStepResponsibleInput').value = row.dataset.responsible;
-                document.getElementById('modalStepReviewerInput').value = row.dataset.reviewer || '';
                 document.getElementById('modalStepDeadlineInput').value = row.dataset.deadline;
-                
-                // Dosya yolu alanını ayarla
-                const filePathRow = document.getElementById('filePathRow');
-                const filePathInput = document.getElementById('modalStepFilePathInput');
-                const filePathLabel = document.getElementById('filePathLabel');
-                const filePathHelp = document.getElementById('filePathHelp');
-                const stepType = row.dataset.stepType;
-                const filePath = row.dataset.filePath || '';
-                
-                if (stepType === 'python_script' || stepType === 'sql_script' || stepType === 'sql_procedure') {
-                    filePathRow.style.display = 'block';
-                    filePathInput.value = filePath;
-                    
-                    if (stepType === 'sql_procedure') {
-                        filePathLabel.textContent = 'Prosedür Yolu';
-                        filePathHelp.textContent = 'Örnek: PACKAGE_NAME.PROCEDURE_NAME veya PROCEDURE_NAME (bağımsız prosedür için)';
-                    } else {
-                        filePathLabel.textContent = 'Dosya Yolu';
-                        filePathHelp.textContent = 'Script dosyasının tam yolu';
-                    }
-                } else {
-                    filePathRow.style.display = 'none';
-                }
 
                 // Log butonunu göster/gizle
                 const showLogsBtn = document.getElementById('showLogsBtn');
                 if (showLogsBtn) {
-                    if (row.dataset.stepType === 'sql_script' || row.dataset.stepType === 'sql_procedure') {
+                    // Sadece SQL script adımları için log butonunu göster
+                    if (row.dataset.stepType === 'sql_script') {
                         showLogsBtn.style.display = 'inline-block';
                         showLogsBtn.onclick = function() {
                             showStepLogs(stepId);
@@ -1747,6 +1769,7 @@
 
                 try {
                     let response;
+                    // Deadline için özel endpoint kullan
                     if (field === 'deadline') {
                         response = await fetch(`/step/${stepId}/update_deadline`, {
                             method: 'POST',
@@ -1767,6 +1790,7 @@
 
                     const result = await response.json();
                     if (result.success) {
+                        // Ana sayfadaki görünümü güncelle
                         const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
                         if (row) {
                             if (field === 'name') {
@@ -1775,15 +1799,10 @@
                             } else if (field === 'responsible') {
                                 row.querySelector('.step-responsible').textContent = value || 'Sorumlu ekle...';
                                 row.dataset.responsible = value;
-                            } else if (field === 'reviewer') {
-                                row.querySelector('.step-reviewer').textContent = value || 'Reviewer ekle...';
-                                row.dataset.reviewer = value;
                             } else if (field === 'description') {
                                 row.dataset.description = value;
                             } else if (field === 'deadline') {
                                 row.dataset.deadline = value;
-                            } else if (field === 'file_path') {
-                                row.dataset.filePath = value;
                             }
                         }
                         showSavingIndicator('Kaydedildi', 'success');
@@ -1796,6 +1815,48 @@
                 }
             });
         });
+
+        // Modal deadline inputunu dinle ve tabloyu güncelle
+        const modalDeadlineInput = document.getElementById('modalStepDeadlineInput');
+        if (modalDeadlineInput) {
+            modalDeadlineInput.addEventListener('change', function () {
+                const modal = document.getElementById('stepDetailModal');
+                const stepId = modal.dataset.stepId;
+                let value = this.value;
+                // Eğer saat yoksa, 09:00 ekle
+                if (value && !value.includes('T')) {
+                    value = value + 'T09:00';
+                }
+                fetch(`/step/${stepId}/update_deadline`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `deadline=${encodeURIComponent(value)}`
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showSavingIndicator('Deadline güncellendi', 'success');
+                            // Tabloyu da güncelle
+                            const row = document.querySelector(`tr[data-step-id="${stepId}"]`);
+                            if (row) {
+                                const dateOnly = value.split('T')[0];
+                                const deadlineInput = row.querySelector('.deadline-input');
+                                if (deadlineInput) {
+                                    deadlineInput.value = dateOnly;
+                                }
+                                row.dataset.deadline = value;
+                            }
+                        } else {
+                            showSavingIndicator('Deadline güncellenemedi', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showSavingIndicator('Deadline güncellenirken hata oluştu', 'error');
+                    });
+            });
+        }
     }
 
     function getStepTypeName(type) {
@@ -2348,7 +2409,7 @@
                     <div class="flex-grow-1">
                         <h6 class="mb-1">
                             <i class="bi ${statusIcon} ${statusColor} me-2"></i>
-                            ${log.query_name || `Sorgu Bloğu ${index}`}
+                            Sorgu Bloğu ${index}
                         </h6>
                         <div class="row">
                             <div class="col-md-3">
@@ -2380,16 +2441,6 @@
             `;
         }
         
-        // Sonuç satır sayısı (SELECT sorguları için)
-        if (log.result_rows !== undefined && log.result_rows > 0) {
-            html += `
-                <div class="mt-2">
-                    <small class="text-muted">Sonuç Satırı:</small>
-                    <strong>${log.result_rows}</strong>
-                </div>
-            `;
-        }
-        
         // Hata mesajı
         if (log.status === 'error' && log.error) {
             html += `
@@ -2400,7 +2451,17 @@
             `;
         }
         
-        // Sorgu metni artık gösterilmiyor (sadece dosyada saklanıyor)
+        // Sorgu metni
+        if (log.query) {
+            html += `
+                <div class="mt-2">
+                    <small class="text-muted">Sorgu:</small>
+                    <div class="bg-light p-2 rounded mt-1">
+                        <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.9em;">${log.query}</pre>
+                    </div>
+                </div>
+            `;
+        }
         
         html += `
                     </div>

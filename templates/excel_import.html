@@ -2,7 +2,7 @@
 
 {% block head %}
 {{ super() }}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/static/css/bootstrap-icons.css">
 {% endblock %}
 
 {% block content %}
@@ -119,7 +119,7 @@
                                     <div class="step-number me-3">3</div>
                                     <h5 class="mb-0 theme-text">Sütun Eşleştirme</h5>
                                 </div>
-                                <div class="ps-5">
+                                <div class="ps-1">
                                     <div class="table-responsive">
                                         <table class="table table-sm theme-table align-middle">
                                             <thead>
@@ -545,12 +545,13 @@
                                 excelColumns = data.columns;
                                 columnTypes = data.column_types;
                                 // Sütun eşleştirme tablosunu göster
-                                if (columnMappingSection) {
+                                if (createNewTableCheckbox.checked) {
+                                    updateColumnMapping()
                                     columnMappingSection.style.display = 'block';
                                 }
 
                                 // Eğer tablo seçiliyse sütun eşleştirmesini güncelle
-                                if (!createNewTableCheckbox.checked && tableSelect.value) {
+                                else if (!createNewTableCheckbox.checked && tableSelect.value) {
                                     updateColumnMapping();
                                 }
                             } else {
@@ -575,6 +576,7 @@
                     // Sütun eşleştirme tablosunu göster
                     if (excelColumns.length > 0) {
                         updateColumnMapping();
+                        columnMappingSection.style.display='block'
                     }
                 } else {
                     existingTableSection.style.display = 'block';
@@ -676,7 +678,18 @@
                             oracleCell.textContent = oracleCol;
                         } else {
                             // Mevcut tablo için eşleşme kontrolü
-                            const matchingColumn = oracleColumns.find(oc => oc.name === oracleCol);
+                            // Önce orijinal ismi dene
+                            let matchingColumn = oracleColumns.find(oc => oc.name === oracleCol);
+                            
+                            // Eğer bulamazsa ve sayısal isimse, COLUMN_ önekli versiyonunu da dene
+                            if (!matchingColumn && /^\d+$/.test(oracleCol)) {
+                                const columnPrefixed = 'COLUMN_' + oracleCol;
+                                matchingColumn = oracleColumns.find(oc => oc.name === columnPrefixed);
+                                if (matchingColumn) {
+                                    oracleCol = columnPrefixed; // Eşleşen ismi kullan
+                                }
+                            }
+                            
                             if (matchingColumn) {
                                 // Eşleşme varsa sütun adını göster
                                 oracleCell.textContent = oracleCol;
@@ -693,6 +706,7 @@
                                     option.textContent = oc.name;
                                     oracleSelect.appendChild(option);
                                 });
+                                oracleSelect.addEventListener('change', checkImportButtonState);
                                 oracleCell.appendChild(oracleSelect);
                             }
                         }
@@ -713,6 +727,7 @@
                             typeSelect.value = 'NVARCHAR2(255)';
                         }
 
+                        typeSelect.addEventListener('change', checkImportButtonState);
                         typeCell.appendChild(typeSelect);
 
                         // İşlem butonları
@@ -722,6 +737,7 @@
                         includeCheckbox.className = 'form-check-input';
                         includeCheckbox.checked = true;
                         includeCheckbox.title = 'Bu sütunu dahil et';
+                        includeCheckbox.addEventListener('change', checkImportButtonState);
                         actionCell.appendChild(includeCheckbox);
 
                         row.appendChild(excelCell);
@@ -766,7 +782,8 @@
                 if (!column) {
                     column = 'COLUMN_' + Math.abs(hashCode(name) % 10000);
                 } else if (/^\d/.test(column)) {
-                    column = 'COLUMN_' + column;
+                    // Sayısal sütun isimleri için önce orijinal ismi dene, bulamazsa COLUMN_ ekle
+                    column = column; // Orijinal sayıyı koru
                 }
 
                 return column;
@@ -790,17 +807,24 @@
                     document.getElementById('excelFilePath').value.trim() !== '';
                 const hasSheet = sheetSelect.value !== '';
                 const isNewTable = createNewTableCheckbox.checked;
-                const hasTable = isNewTable ?
-                    newTableNameInput.value.trim() !== '' :
-                    tableSelect.value !== '';
+                
+                // Tablo kontrolü - yeni tablo seçilmişse tablo adı kontrolü yap, seçilmemişse mevcut tablo seçimi kontrolü yap
+                let hasTable = false;
+                if (isNewTable) {
+                    hasTable = newTableNameInput.value.trim() !== '';
+                } else {
+                    hasTable = tableSelect.value !== '';
+                }
 
                 // Sütun eşleştirmelerini kontrol et
                 let hasValidColumnMappings = true;
-                if (!isNewTable && columnMappingBody.children.length > 0) {
+                if (columnMappingBody.children.length > 0) {
                     const rows = columnMappingBody.getElementsByTagName('tr');
                     for (const row of rows) {
                         const includeCheckbox = row.cells[3].querySelector('input[type="checkbox"]');
                         if (includeCheckbox.checked) {
+                            if (!isNewTable) {
+                                // Mevcut tablo için Oracle sütun seçimi kontrolü
                             const oracleCell = row.cells[1];
                             if (oracleCell.querySelector('select')) {
                                 const oracleSelect = oracleCell.querySelector('select');
@@ -810,11 +834,16 @@
                                 }
                             }
                         }
+                            // Yeni tablo için veri tipi seçimi kontrolü
+                            const typeSelect = row.cells[2].querySelector('select');
+                            if (typeSelect && !typeSelect.value) {
+                                hasValidColumnMappings = false;
+                                break;
+                            }
+                        }
                     }
-                }
-
-                // Yeni tablo oluşturma modunda ve sütunlar yüklenmişse geçerli kabul et
-                if (isNewTable && columnMappingBody.children.length > 0) {
+                } else {
+                    // Sütun eşleştirme tablosu henüz yüklenmemişse geçerli kabul et
                     hasValidColumnMappings = true;
                 }
 
@@ -1156,7 +1185,6 @@
                             }
                             oracleType = row.cells[2].querySelector('select').value;
                         }
-
                         columnMappings.push({
                             excel_column: excelCol,
                             oracle_column: oracleCol,

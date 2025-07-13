@@ -1,17 +1,21 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, send_file
+from flask import Flask, make_response, request, jsonify, render_template, redirect, send_file, session, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect
 from flask_migrate import Migrate
 from flask_cors import CORS
 from datetime import datetime
 import os
-from executor import ProcessExecutor
+from executor import ProcessExecutor, convert_to_oracle_column_name
 import json
 from collections import Counter
 import re
 import pandas as pd
 import oracledb
 from werkzeug.utils import secure_filename
-from sqlalchemy import inspect
+import numpy as np
+import plotly.graph_objs as go
+import plotly.utils
+from chainladder import Chainladder
 
 app = Flask(__name__)
 CORS(app)
@@ -19,15 +23,14 @@ CORS(app)
 app.secret_key = 'your-super-secret-key-here'  
 
 # Oracle veritabanı bağlantı ayarları
-app.config['ORACLE_USERNAME'] = 'your_username'
-app.config['ORACLE_PASSWORD'] = 'your_password'
-app.config['ORACLE_DSN'] = 'your_dsn'
+app.config['ORACLE_USERNAME'] = ''
+app.config['ORACLE_PASSWORD'] = ''
+app.config['ORACLE_DSN'] = ''
 
-# Oracle bağlantı bilgilerini executor'a ilet
 ProcessExecutor.set_oracle_config(
-    username="your_username",
-    password="your_password",
-    dsn="your_dsn"
+    username= app.config['ORACLE_USERNAME'],
+    password= app.config['ORACLE_PASSWORD'],
+    dsn= app.config['ORACLE_DSN']
 )
 
 # SQLite veritabanı ayarları
@@ -146,6 +149,7 @@ class Step(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey('step.id', ondelete='CASCADE'), nullable=True)
     process_id = db.Column(db.Integer, db.ForeignKey('process.id', ondelete='CASCADE'), nullable=False)
     responsible = db.Column(db.String(100))
+    reviewer = db.Column(db.String(100))
     status = db.Column(db.String(20), default='not_started')
     version = db.Column(db.Integer, nullable=False, default=1)
     deadline = db.Column(db.DateTime, nullable=True)
@@ -197,40 +201,8 @@ class Step(db.Model):
         return f"{self.process_id}_{self.step_number}"
 
     def update_status(self):
-        if not self.sub_steps: 
-            return self.status
-        
-        all_not_started = all(step.status == 'not_started' for step in self.sub_steps)
-        has_in_progress = any(step.status == 'in_progress' for step in self.sub_steps)
-        has_waiting = any(step.status == 'waiting' for step in self.sub_steps)
-        all_done = all(step.status == 'done' for step in self.sub_steps)
-        
-        old_status = self.status
-        
-        if has_in_progress:
-            self.status = 'in_progress'
-            if self.completed_at is not None:
-                self.completed_at = None
-        elif has_waiting:
-            self.status = 'waiting'
-            if self.completed_at is not None:
-                self.completed_at = None
-        elif all_not_started:
-            self.status = 'not_started'
-            if self.completed_at is not None:
-                self.completed_at = None
-        elif all_done:
-            self.status = 'done'
-            # Eğer tüm alt adımlar tamamlandıysa ve ana adımın tamamlanma tarihi yoksa
-            if self.completed_at is None:
-                # En son tamamlanan alt adımın tarihini al
-                latest_completion = max(step.completed_at for step in self.sub_steps if step.completed_at is not None)
-                self.completed_at = latest_completion
-        else:
-            self.status = 'in_progress'         
-            if self.completed_at is not None:
-                self.completed_at = None
-                
+        # Alt adımlar tamamlandığında ana adımın otomatik olarak tamamlandı olarak işaretlenmesi kaldırıldı
+        # Artık sadece mevcut durumu döndürür
         return self.status
 
 class StepDependency(db.Model):
@@ -322,6 +294,10 @@ def uncategorized_processes(year):
 
 @app.route('/process/<int:process_id>')
 def process_detail(process_id):
+    response = make_response("aaa")
+    response.headers["Cache-Control"]= "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"]="no-cache"
+    response.headers["Expires"]=0
     process = Process.query.get_or_404(process_id)
     main_steps = Step.query.filter_by(
         process_id=process_id,
@@ -331,6 +307,11 @@ def process_detail(process_id):
     for main_step in main_steps:
         organized_steps.append(main_step)
         organized_steps.extend(get_substeps_recursive(main_step.id))    
+    
+    # Variables'ları eager loading ile yükle
+    for step in organized_steps:
+        step.variables = StepVariable.query.filter_by(step_id=step.id).all()
+    
     return render_template('process_detail.html', 
                          process=process, 
                          steps=organized_steps,
@@ -340,9 +321,41 @@ def get_substeps_recursive(parent_id):
     substeps = []
     direct_substeps = Step.query.filter_by(parent_id=parent_id).order_by(Step.order).all()    
     for substep in direct_substeps:
+        # Variables'ları eager loading ile yükle
+        substep.variables = StepVariable.query.filter_by(step_id=substep.id).all()
         substeps.append(substep)
         substeps.extend(get_substeps_recursive(substep.id))    
     return substeps
+
+def assign_reviewer_to_step(step):
+    """Adım tamamlandığında otomatik olarak reviewer atar"""
+    # Eğer adımın zaten bir reviewer'ı varsa değiştirme
+    if step.reviewer:
+        return
+    
+    # Reviewer atama mantığı:
+    # 1. Önce aynı süreçteki diğer adımların reviewer'larına bak
+    # 2. Eğer yoksa, sorumlu kişiyi reviewer olarak ata
+    # 3. Eğer sorumlu da yoksa, varsayılan bir reviewer ata
+    
+    # Aynı süreçteki diğer adımların reviewer'larını kontrol et
+    other_steps = Step.query.filter_by(process_id=step.process_id).filter(Step.id != step.id).all()
+    existing_reviewers = [s.reviewer for s in other_steps if s.reviewer]
+    
+    if existing_reviewers:
+        # En çok kullanılan reviewer'ı seç
+        from collections import Counter
+        reviewer_counts = Counter(existing_reviewers)
+        most_common_reviewer = reviewer_counts.most_common(1)[0][0]
+        step.reviewer = most_common_reviewer
+    elif step.responsible:
+        # Sorumlu kişiyi reviewer olarak ata
+        step.reviewer = step.responsible
+    else:
+        # Varsayılan reviewer ata (bu kısmı ihtiyaca göre özelleştirebilirsiniz)
+        step.reviewer = "Sistem"
+    
+    db.session.commit()
 
 @app.route('/process/new', methods=['GET', 'POST'])
 def new_process():
@@ -383,7 +396,6 @@ def delete_process(process_id):
         process = Process.query.get_or_404(process_id)
         category_id = process.category_id
         year = process.year
-        
         all_steps = []
         main_steps = Step.query.filter_by(process_id=process_id, parent_id=None).all()        
         for main_step in main_steps:
@@ -401,26 +413,23 @@ def delete_process(process_id):
 
         db.session.delete(process)
         
-        db.session.commit()
-        
+        db.session.commit()        
         flash('Süreç ve tüm ilişkili veriler başarıyla silindi', 'success')
-        
-        # Kategori bazlı yönlendirme
         if category_id:
-            return redirect(url_for('category_processes', category_id=category_id, year=year))
+            return redirect(url_for('category_processes',category_id=category_id,year=year))
         else:
-            return redirect(url_for('uncategorized_processes', year=year))
-            
+            return redirect(url_for('uncategorized_processes',year=year))
+
     except Exception as e:
         db.session.rollback()
         flash(f'Süreç silinirken hata oluştu: {str(e)}', 'error')
+    
         return redirect(url_for('index'))
-
+    
 def extract_sql_parameters(sql_content):
-    """SQL script içindeki &PARAMETRE formatındaki parametreleri bulur"""
     pattern = r'&([A-Za-z][A-Za-z0-9_]*)'
-    matches = re.finditer(pattern, sql_content)
-    return list(set([match.group(1) for match in matches]))  # Tekrar eden parametreleri temizle
+    matches = re.finditer(pattern,sql_content)
+    return list(set([match.group(1) for match in matches]))
 
 @app.route('/step/check_sql_params_from_path', methods=['POST'])
 def check_sql_params_from_path():
@@ -439,7 +448,7 @@ def check_sql_params_from_path():
         # Dosyayı oku
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-            
+        
         parameters = extract_sql_parameters(content)
         return jsonify({
             'success': True,
@@ -455,22 +464,36 @@ def new_step(process_id):
     parent_step = Step.query.get(parent_id) if parent_id else None
     
     if request.method == 'POST':
+        max_order = db.session.query(db.func.max(Step.order)).filter_by(
+            process_id=process_id,
+            parent_id=parent_id
+        ).scalar() or 0 
         step = Step(
             name=request.form['name'],
             description=request.form['description'],
             type=request.form['type'],
-            file_path=request.form.get('file_path', ''),
-            order=request.form.get('order', 0),
+            file_path=request.form['file_path'],  # Başlangıçta boş olarak ayarla
+            order=max_order+1,
             parent_id=parent_id,
             process_id=process_id,
             responsible=request.form.get('responsible', '')
         )
-
-        # Önce step'i kaydet ve id'sini al
+        
         db.session.add(step)
-        db.session.flush()  # Bu noktada step.id değeri atanmış olacak
+        db.session.flush()
 
-        # Eğer SQL script ise ve dosya yolu belirtilmişse
+        # Eğer SQL prosedür tipi seçildiyse, file_path'i ayarla
+        if step.type == 'sql_procedure':
+            package_name = request.form.get('package_name')
+            procedure_name = request.form.get('procedure_name')
+            
+            if package_name and procedure_name:
+                # file_path formatı: "PACKAGE_NAME.PROCEDURE_NAME" veya "PROCEDURE_NAME" (bağımsız prosedür için)
+                if package_name == 'STANDALONE':
+                    step.file_path = procedure_name
+                else:
+                    step.file_path = f"{package_name}.{procedure_name}"
+                
         if step.type == 'sql_script' and step.file_path:
             try:
                 # Dosyayı kontrol et
@@ -486,34 +509,117 @@ def new_step(process_id):
                 
                 # Her parametre için form'dan gelen tipi al
                 for param_name in parameters:
-                    param_type_key = f'param_type_{param_name}'
-                    var_type = request.form.get(param_type_key)
-                    if var_type:  # Eğer tip seçilmişse
-                        variable = StepVariable(
-                            step_id=step.id,
-                            name=param_name,
-                            var_type=var_type,
-                            default_value='',
-                            scope='step_only'
-                        )
-                        db.session.add(variable)
+                    var_type = request.form.get(f'param_type_{param_name}')
+                    variable = StepVariable(
+                        step_id=step.id,
+                        name=param_name,
+                        var_type=var_type,  # Kullanıcının seçtiği tip
+                        default_value='',
+                        scope='step_only'
+                    )
+                    db.session.add(variable)
             except Exception as e:
                 db.session.rollback()
                 flash(f'SQL dosyası okunurken hata oluştu: {str(e)}', 'error')
                 return render_template('new_step.html', process=process, parent_step=parent_step)
 
+        elif step.type == 'excel_import':
+            import_process_id = request.form.get('import_process_id')
+            if import_process_id:
+                step.import_process_id = import_process_id
+        
+        
+        
+        # Eğer SQL prosedür tipi seçildiyse, parametreleri değişken olarak ekle
+        if step.type == 'sql_procedure':
+            package_name = request.form.get('package_name')
+            procedure_name = request.form.get('procedure_name')
+            
+            if package_name and procedure_name:
+                # Prosedür parametrelerini al
+                connection = oracledb.connect(
+                    user=app.config['ORACLE_USERNAME'],
+                    password=app.config['ORACLE_PASSWORD'],
+                    dsn=app.config['ORACLE_DSN']
+                )
+                cursor = connection.cursor()
+                
+                # Bağımsız prosedür veya paket içindeki prosedür için farklı sorgular
+                if package_name == 'STANDALONE':
+                    query = """
+                    SELECT 
+                        argument_name,
+                        data_type,
+                        in_out
+                    FROM 
+                        all_arguments
+                    WHERE 
+                        object_name = :procedure_name
+                        AND owner = :owner
+                    ORDER BY 
+                        position
+                    """
+                    cursor.execute(query, {
+                        'procedure_name': procedure_name,
+                        'owner': app.config['ORACLE_USERNAME'].upper()
+                    })
+                else:
+                    query = """
+                    SELECT 
+                        argument_name,
+                        data_type,
+                        in_out
+                    FROM 
+                        all_arguments
+                    WHERE 
+                        package_name = :package_name
+                        AND object_name = :procedure_name
+                        AND owner = :owner
+                    ORDER BY 
+                        position
+                    """
+                    cursor.execute(query, {
+                        'package_name': package_name,
+                        'procedure_name': procedure_name,
+                        'owner': app.config['ORACLE_USERNAME'].upper()
+                    })
+                
+                params = cursor.fetchall()
+                cursor.close()
+                connection.close()
+                
+                # Her parametre için değişken oluştur
+                for param in params:
+                    arg_name, data_type, in_out = param
+                    if arg_name:  # Eğer argüman adı varsa
+                        variable = StepVariable(
+                            step_id=step.id,
+                            name=arg_name,
+                            var_type=data_type,  # Varsayılan olarak text tipi
+                            default_value=request.form.get(f'param_{arg_name}', ''),
+                            scope='step_only'
+                        )
+                        db.session.add(variable)
+        
         try:
             db.session.commit()
-            return redirect(url_for('process_detail', process_id=process_id))
+            return redirect(url_for('process_detail',process_id=process_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Adım kaydedilirken hata oluştu: {str(e)}', 'error')
-            return render_template('new_step.html', process=process, parent_step=parent_step)
+            flash(f'Adım kaydedilirken hata oluştu: {str(e)}','error')
+            return render_template('new_step.html',process=process,parent_step=parent_step)
+    
+    
+
+    all_steps = Step.query.filter_by(process_id=process_id).all()
+    import_processes = ImportProcess.query.order_by(ImportProcess.name).all()
     
     return render_template('new_step.html', 
                          process=process, 
+                         parent_id=parent_id,
                          parent_step=parent_step,
-                         import_processes=ImportProcess.query.all())
+                         steps=all_steps,
+                         import_processes=import_processes)
 
 @app.route('/step/<int:step_id>/execute', methods=['POST'])
 def execute_step(step_id):
@@ -522,15 +628,50 @@ def execute_step(step_id):
     if step.status == 'done':
         return jsonify({'status': 'error', 'message': 'Bu adım zaten tamamlanmış.'})
     
+    step.status = 'running'
+    db.session.commit()
+    
     try:
-        # Adımı çalışıyor durumuna getir
-        step.status = 'running'
-        db.session.commit()
-
-        if step.type == 'sql_procedure':
-            connection = None
-            cursor = None
+        if step.type == 'python_script':
+            # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
+            output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
+            if output_dir:
+                ProcessExecutor._files_before = set(os.listdir(output_dir))
+            result = ProcessExecutor.execute_python_script(step.file_path, output_dir, step.variables)
+            
+            if result.get('success'):
+                # Adım durumunu otomatik olarak güncelle
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                # Reviewer ata
+                assign_reviewer_to_step(step)
+                db.session.commit()
+            
+            return jsonify(result)
+        elif step.type == 'sql_script':
+            result = ProcessExecutor.execute_sql_script(step)
+            if result.get('status') == 'success':
+                # Adım durumunu otomatik olarak güncelle
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                # Reviewer ata
+                assign_reviewer_to_step(step)
+                db.session.commit()
+                return jsonify(result)
+            else:
+                return jsonify(result)
+        elif step.type == 'sql_procedure':
             try:
+                # Log dosyası yolunu belirle
+                log_file_path = os.path.join(app.instance_path, f'step_{step.id}_logs.json')
+                
+                # Başlangıçta boş log dosyası oluştur
+                with open(log_file_path, 'w', encoding='utf-8') as f:
+                    json.dump([], f, ensure_ascii=False, indent=2)
+                
+                # Timeline başlangıç zamanı
+                start_time = datetime.now()
+                
                 # Oracle bağlantısını oluştur
                 connection = oracledb.connect(
                     user=app.config['ORACLE_USERNAME'],
@@ -540,53 +681,32 @@ def execute_step(step_id):
                 cursor = connection.cursor()
                 
                 # Prosedür adını ve paket adını al
-                if '.' in step.file_path:
-                    package_name, procedure_name = step.file_path.split('.')
+                if "." in step.file_path:
+                    package_name = step.file_path.split('.')[0]  # file_path formatı: "PACKAGE_NAME.PROCEDURE_NAME"
+                    procedure_name = step.file_path.split('.')[1]
                 else:
                     package_name = 'STANDALONE'
                     procedure_name = step.file_path
-
-                # Değişkenlerden parametre değerlerini al ve dönüştür
+                
+                # Prosedür çağrı adını belirle
+                if package_name == 'STANDALONE':
+                    call_name = procedure_name
+                else:
+                    call_name = f"{package_name}.{procedure_name}"
+                
+                # Değişkenlerden parametre değerlerini al
+                params = {}
                 param_values = []
                 for var in step.variables:
-                    # Değeri al ve tek tırnakları temizle
-                    value = var.default_value.strip("'") if var.default_value else None
-                    
-                    if not value:
-                        param_values.append(None)
-                        continue
-
-                    if var.var_type == 'date':
-                        try:
-                            # Tarihi datetime nesnesine çevir
-                            from datetime import datetime
-                            # Önce YYYY-MM-DD formatından datetime'a çevir
-                            date_obj = datetime.strptime(value, '%Y-%m-%d')
-                            # Oracle DATE tipinde bir değişken oluştur
-                            date_var = cursor.var(oracledb.DB_TYPE_DATE)
-                            # Değişkene datetime nesnesini ata
-                            date_var.setvalue(0, date_obj)
-                            value = date_var
-                        except ValueError as e:
-                            step.status = 'failed'
-                            step.error_message = f'Tarih değeri dönüştürülürken hata oluştu ({var.name}): {str(e)}'
-                            db.session.commit()
-                            return jsonify({
-                                'status': 'error',
-                                'message': step.error_message
-                            })
-                    elif var.var_type == 'number':
-                        try:
-                            value = float(value)
-                        except ValueError:
-                            step.status = 'failed'
-                            step.error_message = f'Sayısal değer dönüştürülürken hata oluştu ({var.name})'
-                            db.session.commit()
-                            return jsonify({
-                                'status': 'error',
-                                'message': step.error_message
-                            })
-                    param_values.append(value)
+                    if var.var_type.upper() == 'DATE':
+                        dateobj = datetime.strptime(var.default_value.replace("'",""),'%Y-%m-%d') 
+                        oracleDate = cursor.var(oracledb.DB_TYPE_DATE)
+                        oracleDate.setvalue(0,dateobj)
+                        params[var.name] = oracleDate
+                        param_values.append(oracleDate)
+                    else:
+                        params[var.name] = var.default_value
+                        param_values.append(var.default_value)
                 
                 # Prosedürü çağır
                 if package_name == 'STANDALONE':
@@ -596,126 +716,179 @@ def execute_step(step_id):
                     # Paket içindeki prosedür
                     cursor.callproc(f"{package_name}.{procedure_name}", param_values)
                 
+                # Timeline bitiş zamanı
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                
                 # Değişiklikleri kaydet
                 connection.commit()
+                
+                # Başarılı log entry'si oluştur
+                log_entry = {
+                    'query_name': call_name,
+                    'start_time': start_time.strftime('%H:%M:%S'),
+                    'end_time': end_time.strftime('%H:%M:%S'),
+                    'duration': f"{duration:.2f}s",
+                    'status': 'success',
+                    'affected_rows': 0,
+                    'error': ''
+                }
+                
+                # Logları gerçek zamanlı güncelle
+                try:
+                    with open(log_file_path, 'r', encoding='utf-8') as f:
+                        logs = json.load(f)
+                    logs.append(log_entry)
+                    with open(log_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(logs, f, ensure_ascii=False, indent=2)
+                except Exception as log_error:
+                    print(f"Log güncelleme hatası: {log_error}")
+                
                 cursor.close()
                 connection.close()
                 
-                # Adımın durumunu güncelle
+                # Adım durumunu otomatik olarak güncelle
                 step.status = 'done'
                 step.completed_at = datetime.now()
+                # Reviewer ata
+                assign_reviewer_to_step(step)
                 db.session.commit()
                 
                 return jsonify({
                     'status': 'success',
-                    'message': 'Prosedür başarıyla çalıştırıldı'
+                    'message': 'Prosedür başarıyla çalıştırıldı',
+                    'timeline': [{
+                        'query_name': call_name,
+                        'start_time': start_time.strftime('%H:%M:%S'),
+                        'end_time': end_time.strftime('%H:%M:%S'),
+                        'duration': f"{duration:.2f}s",
+                        'status': 'success',
+                        'type': 'PROCEDURE',
+                        'query': call_name
+                    }]
                 })
-            except oracledb.Error as e:
-                error_msg = str(e)
-                if cursor:
-                    cursor.close()
-                if connection:
-                    connection.close()
                 
-                # Hata durumunda adımın durumunu güncelle
-                step.status = 'failed'
-                step.error_message = f'Oracle hatası: {error_msg}'
-                db.session.commit()
-                
-                return jsonify({
-                    'status': 'error',
-                    'message': step.error_message
-                })
             except Exception as e:
-                if cursor:
-                    cursor.close()
-                if connection:
-                    connection.close()
+                # Hata durumunda timeline bitiş zamanı
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds()
                 
-                # Hata durumunda adımın durumunu güncelle
+                # Hata log entry'si oluştur
+                log_entry = {
+                    'query_name': call_name if 'call_name' in locals() else 'Prosedür',
+                    'start_time': start_time.strftime('%H:%M:%S'),
+                    'end_time': end_time.strftime('%H:%M:%S'),
+                    'duration': f"{duration:.2f}s",
+                    'status': 'error',
+                    'affected_rows': 0,
+                    'error': str(e)
+                }
+                
+                # Logları gerçek zamanlı güncelle (hata durumu)
+                try:
+                    with open(log_file_path, 'r', encoding='utf-8') as f:
+                        logs = json.load(f)
+                    logs.append(log_entry)
+                    with open(log_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(logs, f, ensure_ascii=False, indent=2)
+                except Exception as log_error:
+                    print(f"Log güncelleme hatası: {log_error}")
+                
+                # Hata durumunda bağlantıyı kapat
+                if 'connection' in locals():
+                    try:
+                        connection.rollback()
+                        cursor.close()
+                        connection.close()
+                    except:
+                        pass
+                
+                # Adım durumunu güncelle
                 step.status = 'failed'
-                step.error_message = f'Beklenmeyen hata: {str(e)}'
                 db.session.commit()
                 
                 return jsonify({
                     'status': 'error',
-                    'message': step.error_message
+                    'message': f'Prosedür çalıştırılırken hata oluştu: {str(e)}',
+                    'timeline': [{
+                        'query_name': call_name if 'call_name' in locals() else 'Prosedür',
+                        'start_time': start_time.strftime('%H:%M:%S'),
+                        'end_time': end_time.strftime('%H:%M:%S'),
+                        'duration': f"{duration:.2f}s",
+                        'status': 'error',
+                        'error_message': str(e),
+                        'query': call_name if 'call_name' in locals() else 'Prosedür'
+                    }]
                 })
-
-        elif step.type == 'python_script':
-            try:
-                # Python script çalıştırılmadan önce çıktı dizinindeki dosyaları kaydet
-                output_dir = os.path.join(os.environ['USERPROFILE'], 'Downloads')
-                print(f"[DEBUG] output_dir: {output_dir}")
-                if output_dir:
-                    ProcessExecutor._files_before = set(os.listdir(output_dir))
-                result = ProcessExecutor.execute_python_script(step.file_path, output_dir, step.variables)
-                
-                if result.get('success'):
-                    step.status = 'done'
-                    step.completed_at = datetime.now()
-                else:
-                    step.status = 'failed'
-                    step.error_message = result.get('error')
-                
-                db.session.commit()
-                return jsonify(result)
-            except Exception as e:
-                step.status = 'failed'
-                step.error_message = str(e)
-                db.session.commit()
-                return jsonify({
-                    'status': 'error',
-                    'message': str(e)
-                })
-
-        elif step.type == 'sql_script':
-            try:
-                result = ProcessExecutor.execute_sql_script(step)
-                if result.get('status') == 'success':
-                    step.status = 'done'
-                    step.completed_at = datetime.now()
-                else:
-                    step.status = 'failed'
-                    step.error_message = result.get('message')
-                
-                db.session.commit()
-                return jsonify(result)
-            except Exception as e:
-                step.status = 'failed'
-                step.error_message = str(e)
-                db.session.commit()
-                return jsonify({
-                    'status': 'error',
-                    'message': str(e)
-                })
-        else:
-            # Diğer adım tipleri için mevcut kod
-            result = ProcessExecutor.execute_step(step.type, step.file_path, variables=step.variables)
+        elif step.type == 'excel_import':
+            if not step.import_process_id:
+                return jsonify({'status': 'error', 'message': 'Import process seçilmemiş.'})
             
-            if result.get('success'):
+            import_process = ImportProcess.query.get(step.import_process_id)
+            if not import_process:
+                return jsonify({'status': 'error', 'message': 'Seçilen import process bulunamadı.'})
+            
+            # Import process'i çalıştır
+            result = ProcessExecutor.execute_import_process(import_process)
+            
+            if result.get('status') == 'success':
+                # Adım durumunu otomatik olarak güncelle
                 step.status = 'done'
                 step.completed_at = datetime.now()
+                # Reviewer ata
+                assign_reviewer_to_step(step)
+                db.session.commit()
+                return jsonify({'status': 'success', 'message': 'Excel import başarıyla tamamlandı.'})
             else:
-                step.status = 'failed'
-                step.error_message = result.get('error')
+                return jsonify({'status': 'error', 'message': result.get('message', 'Excel import sırasında bir hata oluştu.')})
+        else:
+            # Diğer adım tipleri için mevcut işlemleri yap
+            result = ProcessExecutor.execute_step(step.type, step.file_path, output_dir=None, variables=step.variables)
             
-            db.session.commit()
-            return jsonify(result)
-
+            if result.get('success'):
+                # Adım durumunu otomatik olarak güncelle
+                step.status = 'done'
+                step.completed_at = datetime.now()
+                # Reviewer ata
+                assign_reviewer_to_step(step)
+                db.session.commit()
+                return jsonify({'status': 'success', 'message': 'Adım başarıyla tamamlandı.'})
+            else:
+                return jsonify({'status': 'error', 'message': result.get('error', 'Adım çalıştırılırken bir hata oluştu.')})
     except Exception as e:
-        # Genel hata durumunda adımın durumunu güncelle
-        step.status = 'failed'
-        step.error_message = str(e)
-        db.session.commit()
+        db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/step/<int:step_id>/variables/new', methods=['GET', 'POST'])
 def new_variable(step_id):
     step = Step.query.get_or_404(step_id)    
-    if step.type == 'main_step' or step.type not in ['python_script', 'sql_script', 'sql_procedure', 'mail']:
+    if step.type == 'main_step' or step.type not in ['python_script', 'sql_script', 'sql_procedure', 'mail', 'excel_import']:
         flash('Bu adım tipine değişken eklenemez.', 'error')
         return redirect(url_for('process_detail', process_id=step.process_id))    
+    
+    # Excel import adımları için özel işlem
+    if step.type == 'excel_import':
+        if request.method == 'POST':
+            import_process_id = request.form.get('import_process_id')
+            if import_process_id:
+                # Adımın import_process_id'sini güncelle
+                step.import_process_id = int(import_process_id)
+                db.session.commit()
+                flash('Excel import işlemi başarıyla seçildi.', 'success')
+                return redirect(url_for('process_detail', process_id=step.process_id))
+            else:
+                flash('Lütfen bir excel import işlemi seçin.', 'error')
+                return redirect(url_for('new_variable', step_id=step_id))
+        
+        # Kayıtlı import process'leri getir
+        import_processes = ImportProcess.query.order_by(ImportProcess.name).all()
+        return render_template('new_variable.html', 
+                             step=step, 
+                             parent_variables=[],
+                             is_mail_step=False,
+                             is_excel_import=True,
+                             import_processes=import_processes)
+    
     if request.method == 'POST':
         name = request.form.get('name')
         var_type = request.form.get('var_type')
@@ -754,7 +927,8 @@ def new_variable(step_id):
     return render_template('new_variable.html', 
                          step=step, 
                          parent_variables=parent_variables,
-                         is_mail_step=is_mail_step)
+                         is_mail_step=is_mail_step,
+                         is_excel_import=False)
 
 
 @app.route('/variable/<int:variable_id>/update', methods=['POST'])
@@ -796,7 +970,7 @@ def update_step_field(step_id):
     field = request.form.get('field')
     value = request.form.get('value')
     
-    allowed_fields = ['name', 'description', 'responsible', 'file_path']
+    allowed_fields = ['name', 'description', 'responsible', 'reviewer', 'file_path']
     if field not in allowed_fields:
         return jsonify({'success': False, 'message': 'Geçersiz alan'})
     
@@ -891,12 +1065,8 @@ def update_step_status(step_id):
             step.completed_at = None
             
         db.session.commit()       
-        if step.parent_id:
-            parent = step.parent
-            while parent:
-                parent.update_status()
-                db.session.commit()
-                parent = parent.parent    
+        # Ana adımın durumunu otomatik olarak güncelleme kaldırıldı
+        # Artık sadece mevcut adım güncellenir, üst adımlar manuel olarak güncellenmelidir    
     return redirect(url_for('process_detail', process_id=step.process_id))
 
 def update_substeps_status(step_id, new_status):
@@ -925,17 +1095,8 @@ def update_substeps_status(step_id, new_status):
     
         db.session.commit()
     
-    # Ana adımın durumunu güncelle
-    if parent_step.sub_steps:
-        parent_step.update_status()
-        db.session.commit()
-        
-        # Üst seviye adımları da güncelle
-        current_parent = parent_step.parent
-        while current_parent:
-            current_parent.update_status()
-            db.session.commit()
-            current_parent = current_parent.parent
+    # Ana adımın durumunu otomatik olarak güncelleme kaldırıldı
+    # Artık sadece alt adımlar güncellenir, ana adım manuel olarak güncellenmelidir
 
 
 @app.route('/variables/batch-update', methods=['POST'])
@@ -1230,7 +1391,8 @@ def copy_step(original_step, new_process_id, new_parent_id):
         parent_id=new_parent_id,
         process_id=new_process_id,
         responsible=original_step.responsible,
-        status='not_started'
+        status='not_started',
+        import_process_id = original_step.import_process_id
     )
     db.session.add(new_step)
     db.session.flush()      
@@ -1607,6 +1769,7 @@ def delete_category(category_id):
     
     return redirect(url_for('index'))
 
+
 @app.route('/process/<int:process_id>/update_category', methods=['POST'])
 def update_process_category(process_id):
     process = Process.query.get_or_404(process_id)
@@ -1741,47 +1904,6 @@ def get_excel_sheets():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-def convert_to_oracle_column_name(column_name):
-    """
-    Excel sütun isimlerini Oracle uyumlu formata dönüştürür.
-    - Türkçe karakterleri değiştirir
-    - Boşlukları alt çizgi ile değiştirir
-    - Özel karakterleri kaldırır
-    - Tüm harfleri büyük yapar
-    """
-    # Türkçe karakter dönüşümü
-    tr_chars = {
-        'ı': 'I', 'ğ': 'G', 'ü': 'U', 'ş': 'S', 'ö': 'O', 'ç': 'C',
-        'İ': 'I', 'Ğ': 'G', 'Ü': 'U', 'Ş': 'S', 'Ö': 'O', 'Ç': 'C',
-        'i': 'I', 'g': 'G', 'u': 'U', 's': 'S', 'o': 'O', 'c': 'C'
-    }
-    
-    # Sütun ismini dönüştür
-    column = str(column_name)
-    
-    # Türkçe karakterleri değiştir
-    for tr_char, eng_char in tr_chars.items():
-        column = column.replace(tr_char, eng_char)
-    
-    # Boşlukları ve özel karakterleri alt çizgi ile değiştir
-    column = re.sub(r'[^a-zA-Z0-9]', '_', column)
-    
-    # Birden fazla alt çizgiyi tek alt çizgiye dönüştür
-    column = re.sub(r'_+', '_', column)
-    
-    # Başındaki ve sonundaki alt çizgileri kaldır
-    column = column.strip('_')
-    
-    # Tüm harfleri büyük yap
-    column = column.upper()
-    
-    # Oracle'da geçerli bir sütun ismi oluştur
-    if not column:
-        column = 'COLUMN_' + str(hash(str(column_name)) % 10000)
-    elif column[0].isdigit():
-        column = 'COLUMN_' + column
-    
-    return column
 
 @app.route('/api/excel/columns', methods=['POST'])
 def get_excel_columns():
@@ -1805,6 +1927,9 @@ def get_excel_columns():
             if not os.path.exists(file_path):
                 return jsonify({'success': False, 'error': 'Dosya bulunamadı'})
             df = pd.read_excel(file_path, sheet_name=sheet_name)
+        
+        # Sütun isimlerini string'e çevir
+        df.columns = df.columns.map(str)
         
         # Sütun bilgilerini hazırla
         columns = df.columns.tolist()
@@ -1880,226 +2005,158 @@ def get_oracle_columns(table_name):
 @app.route('/api/excel/import', methods=['POST'])
 def import_excel():
     try:
-        import_process_id = request.form.get('import_process_id')
-        if not import_process_id:
-            return jsonify({
-                'status': 'error',
-                'message': 'Import process ID gerekli'
-            })
-
-        import_process = ImportProcess.query.get(import_process_id)
-        if not import_process:
-            return jsonify({
-                'status': 'error',
-                'message': 'Import process bulunamadı'
-            })
-
-        # Excel dosyasını oku
-        try:
-            # Excel dosyasını chunk'lar halinde oku
-            chunk_size = 5000  # Her seferde okunacak satır sayısı
-            excel_data = pd.read_excel(
-                import_process.file_path,
-                sheet_name=import_process.sheet_name,
-                chunksize=chunk_size,
-                engine='openpyxl'
-            )
-        except Exception as e:
-            return jsonify({
-                'status': 'error',
-                'message': f'Excel dosyası okunamadı: {str(e)}'
-            })
-
-        # Oracle bağlantısını oluştur
-        connection = oracledb.connect(
-            user=app.config['ORACLE_USERNAME'],
-            password=app.config['ORACLE_PASSWORD'],
-            dsn=app.config['ORACLE_DSN']
-        )
+        file_input_mode = request.form.get('file_input_mode')
+        sheet_name = request.form.get('sheet_name')
+        create_new_table = request.form.get('create_new_table') == 'true'
+        column_mappings = json.loads(request.form.get('column_mappings', '[]'))
+        
+        # Dosya kontrolü
+        if file_input_mode == 'select':
+            if 'file' not in request.files:
+                return jsonify({'success': False, 'error': 'Dosya yüklenmedi'})
+            file = request.files['file']
+            df = pd.read_excel(file, sheet_name=sheet_name)
+        else:  # path mode
+            file_path = request.form.get('file_path')
+            if not file_path:
+                return jsonify({'success': False, 'error': 'Dosya yolu belirtilmedi'})
+            if not os.path.exists(file_path):
+                return jsonify({'success': False, 'error': 'Dosya bulunamadı'})
+            df = pd.read_excel(file_path, sheet_name=sheet_name)
+        
+        # Sütun isimlerini string'e çevir
+        df.columns = df.columns.map(str)
+        
+        if not sheet_name:
+            return jsonify({'success': False, 'error': 'Sayfa adı gerekli'})
+        
+        # Oracle bağlantı bilgilerini al
+        username = app.config.get('ORACLE_USERNAME')
+        password = app.config.get('ORACLE_PASSWORD')
+        dsn = app.config.get('ORACLE_DSN')
+        
+        # Oracle'a bağlan
+        connection = oracledb.connect(user=username, password=password, dsn=dsn)
         cursor = connection.cursor()
-
-        # Kolon eşleştirmelerini al
-        column_mappings = json.loads(import_process.column_mappings)
-
-        # Veri tipi dönüşüm fonksiyonları
-        def convert_to_oracle_type(value, data_type, length=None):
-            if pd.isna(value):
-                return None
+        
+        if create_new_table:
+            # Yeni tablo adını al
+            new_table_name = request.form.get('new_table_name')
+            if not new_table_name:
+                return jsonify({'success': False, 'error': 'Yeni tablo adı gerekli'})
             
+            # Tablo adını Oracle uyumlu formata dönüştür
+            new_table_name = convert_to_oracle_column_name(new_table_name)
+            # CREATE TABLE sorgusunu oluştur
+            create_table_query = f"""
+            CREATE TABLE {new_table_name} (
+                {', '.join(f'"{mapping["oracle_column"]}" {mapping["oracle_type"]}' for mapping in column_mappings)}
+            )
+            """
             try:
-                if data_type.startswith('NUMBER'):
-                    # Sayısal değerler için
-                    if isinstance(value, (int, float)):
-                        return value
-                    elif isinstance(value, str):
-                        # Binlik ayracı ve diğer karakterleri temizle
-                        clean_value = value.replace(',', '').replace('.', '').strip()
-                        return float(clean_value) if clean_value else 0
-                    else:
-                        return 0
-                
-                elif data_type == 'DATE':
-                    # Tarih değerleri için
-                    if isinstance(value, (datetime, pd.Timestamp)):
-                        return value
-                    elif isinstance(value, str):
-                        # Farklı tarih formatlarını dene
-                        try:
-                            return pd.to_datetime(value).to_pydatetime()
-                        except:
-                            return None
-                    else:
-                        return None
-                
-                elif data_type.startswith('TIMESTAMP'):
-                    # Timestamp değerleri için
-                    if isinstance(value, (datetime, pd.Timestamp)):
-                        return value
-                    elif isinstance(value, str):
-                        try:
-                            return pd.to_datetime(value).to_pydatetime()
-                        except:
-                            return None
-                    else:
-                        return None
-                
-                elif data_type.startswith('VARCHAR2') or data_type.startswith('CHAR'):
-                    # Metin değerleri için
-                    if value is None:
-                        return None
-                    str_value = str(value).strip()
-                    # Uzunluk kontrolü
-                    if length and len(str_value) > int(length):
-                        return str_value[:int(length)]
-                    return str_value
-                
-                else:
-                    # Diğer tipler için string dönüşümü
-                    return str(value) if value is not None else None
-            
-            except Exception as e:
-                print(f"Veri dönüşüm hatası: {str(e)} - Değer: {value}, Tip: {data_type}")
-                return None
-
-        # Yeni tablo oluşturma
-        if import_process.create_new_table:
-            try:
-                # Önce tabloyu sil (eğer varsa)
-                try:
-                    cursor.execute(f"DROP TABLE {import_process.table_name}")
-                    connection.commit()
-                except:
-                    pass  # Tablo yoksa devam et
-
-                # Yeni tabloyu oluştur
-                create_table_sql = f"CREATE TABLE {import_process.table_name} ("
-                columns = []
-                for excel_col, mapping in column_mappings.items():
-                    oracle_col = convert_to_oracle_column_name(mapping['oracle_column'])
-                    data_type = mapping['data_type']
-                    if data_type == 'VARCHAR2' and not mapping.get('length'):
-                        mapping['length'] = '255'
-                    column_def = f"{oracle_col} {data_type}"
-                    if mapping.get('length'):
-                        column_def += f"({mapping['length']})"
-                    columns.append(column_def)
-                create_table_sql += ", ".join(columns) + ")"
-
-                cursor.execute(create_table_sql)
+                cursor.execute(create_table_query)
                 connection.commit()
-            except Exception as e:
-                connection.rollback()
-                cursor.close()
-                connection.close()
+            except oracledb.DatabaseError as e:
+                error, = e.args
+                return jsonify({'success': False, 'error': f'Tablo oluşturulurken hata: {error.message}'})
+            
+            table_name = new_table_name
+        else:
+            table_name = request.form.get('table_name')
+            if not table_name:
+                return jsonify({'success': False, 'error': 'Hedef tablo adı gerekli'})
+            
+            # Tablo yapısını al
+            cursor.execute(f"SELECT column_name FROM user_tab_columns WHERE table_name = '{table_name}'")
+            oracle_columns = [row[0] for row in cursor.fetchall()]
+            
+            # Eşleşen sütunları kontrol et
+            mapping_columns = [mapping['oracle_column'] for mapping in column_mappings]
+            invalid_columns = [col for col in mapping_columns if col not in oracle_columns]
+            
+            if invalid_columns:
                 return jsonify({
-                    'status': 'error',
-                    'message': f'Tablo oluşturulurken hata: {str(e)}'
+                    'success': False,
+                    'error': f'Geçersiz sütun isimleri: {", ".join(invalid_columns)}'
                 })
+            
+            # İçe aktarma modunu kontrol et
+            import_mode = request.form.get('import_mode', 'append')
+            if import_mode == 'replace':
+                try:
+                    # Tabloyu temizle
+                    cursor.execute(f"TRUNCATE TABLE {table_name}")
+                    connection.commit()
+                except oracledb.DatabaseError as e:
+                    error, = e.args
+                    return jsonify({
+                        'success': False,
+                        'error': f'Tablo temizlenirken hata: {error.message}'
+                })
+        
+        # Sadece dahil edilen sütunları al
+        included_columns = [mapping['excel_column'] for mapping in column_mappings]
+        
+        # Sütun eşleştirmelerini hazırla
+        column_type_map = {}
+        oracle_column_map = {}  # Excel sütun adı -> Oracle sütun adı eşleştirmesi
+        for mapping in column_mappings:
+            excel_col = mapping.get('excel_column')
+            oracle_col = mapping.get('oracle_column')
+            oracle_type = mapping.get('oracle_type')
+            if excel_col and oracle_col:
+                column_type_map[excel_col] = oracle_type
+                oracle_column_map[excel_col] = oracle_col
+        
+        # Sadece dahil edilen sütunları kullan
+        columns = included_columns
+        placeholders = ','.join([':' + str(i+1) for i in range(len(columns))])        
+        # Oracle sütun adlarını tırnak içinde kullan (sayısal isimler için)
+        oracle_columns_quoted = [f'"{oracle_column_map[col]}"' for col in columns]
+        insert_query = f"INSERT INTO {table_name} ({', '.join(oracle_columns_quoted)}) VALUES ({placeholders})"
+        
+        # Verileri Oracle'a aktar
+        data_to_insert = []
 
-        # Veri aktarımı için hazırlık
-        excel_columns = list(column_mappings.keys())
-        oracle_columns = [convert_to_oracle_column_name(mapping['oracle_column']) 
-                         for mapping in column_mappings.values()]
-
-        # Insert SQL hazırla
-        placeholders = ':' + ', :'.join(map(str, range(1, len(oracle_columns) + 1)))
-        insert_sql = f"INSERT INTO {import_process.table_name} ({', '.join(oracle_columns)}) VALUES ({placeholders})"
-
-        total_rows = 0
-        error_rows = []
-        batch_size = 1000  # Her seferde commit edilecek satır sayısı
-
+        for _, row in df.iterrows():
+            row_data = []
+            for col in columns:
+                value = row[col]
+                oracle_type = column_type_map.get(col)
+                converted_value = convert_excel_value_to_oracle(value, oracle_type)
+                row_data.append(converted_value)
+            data_to_insert.append(row_data)
+            
+            
+            
         try:
-            # Her chunk için
-            for chunk_number, chunk_df in enumerate(excel_data):
-                # Sadece eşleştirilen kolonları al
-                chunk_df = chunk_df[excel_columns]
-                
-                # Veri dönüşümü yap
-                converted_rows = []
-                for _, row in chunk_df.iterrows():
-                    converted_row = []
-                    for excel_col, mapping in column_mappings.items():
-                        value = row[excel_col]
-                        data_type = mapping['data_type']
-                        length = mapping.get('length')
-                        converted_value = convert_to_oracle_type(value, data_type, length)
-                        converted_row.append(converted_value)
-                    converted_rows.append(converted_row)
-                
-                # Veriyi batch'ler halinde işle
-                for i in range(0, len(converted_rows), batch_size):
-                    batch = converted_rows[i:i + batch_size]
-                    try:
-                        # executemany ile toplu insert
-                        cursor.executemany(insert_sql, batch)
-                        connection.commit()
-                        total_rows += len(batch)
-                    except Exception as e:
-                        connection.rollback()
-                        # Hata durumunda tek tek insert dene
-                        for row_idx, row in enumerate(batch):
-                            try:
-                                cursor.execute(insert_sql, row)
-                                connection.commit()
-                                total_rows += 1
-                            except Exception as e:
-                                connection.rollback()
-                                error_rows.append({
-                                    'chunk': chunk_number,
-                                    'row': i + row_idx,
-                                    'error': str(e),
-                                    'data': str(row)
-                                })
-
-        except Exception as e:
-            connection.rollback()
-            cursor.close()
-            connection.close()
+            cursor.executemany(insert_query, data_to_insert)
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            # Daha detaylı hata mesajı
+            error_msg = f'Veri aktarımı sırasında hata: {error.message}'
+            if 'unsupported Python type' in error.message:
+                error_msg += '. Bu hata genellikle veri tipi uyumsuzluğundan kaynaklanır. Lütfen sütun tiplerini kontrol edin.'
             return jsonify({
-                'status': 'error',
-                'message': f'Veri aktarımı sırasında hata: {str(e)}'
+                'success': False, 
+                'error': error_msg
             })
-
-        # Son kullanma zamanını güncelle
-        import_process.last_used_at = datetime.utcnow()
-        db.session.commit()
-
+        
+        connection.commit()
         cursor.close()
         connection.close()
-
+        
+        # Sütun eşleştirme bilgilerini hazırla
+        column_mapping = {mapping['excel_column']: mapping['oracle_column'] for mapping in column_mappings}
+        
         return jsonify({
-            'status': 'success',
-            'message': f'Toplam {total_rows} satır aktarıldı.',
-            'error_count': len(error_rows),
-            'errors': error_rows[:100]  # İlk 100 hatayı gönder
+            'success': True,
+            'message': f'{len(df)} satır başarıyla içe aktarıldı' + 
+                      (f' ve {table_name} tablosu oluşturuldu' if create_new_table else ''),
+            'column_mapping': column_mapping
         })
-
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Beklenmeyen hata: {str(e)}'
-        })
+        return jsonify({'success': False, 'error': str(e)})
 
 # Import Process modeli
 class ImportProcess(db.Model):
@@ -2136,9 +2193,6 @@ def create_import_process_table():
         # Tablo zaten varsa oluşturmayı atla
         if not inspector.has_table('import_process'):
             db.create_all()
-            print("import_process tablosu oluşturuldu")
-        else:
-            print("import_process tablosu zaten mevcut")
 
 create_import_process_table()
 
@@ -2203,7 +2257,6 @@ def delete_import_process(process_id):
 def execute_import_process(process_id):
     try:
         process = ImportProcess.query.get_or_404(process_id)
-        
         # Dosyanın varlığını kontrol et
         if not os.path.exists(process.file_path):
             return jsonify({
@@ -2213,6 +2266,8 @@ def execute_import_process(process_id):
         
         # Import işlemini gerçekleştir
         df = pd.read_excel(process.file_path, sheet_name=process.sheet_name)
+        # Sütun isimlerini string'e çevir
+        df.columns = df.columns.map(str)
         column_mappings = json.loads(process.column_mappings)
         
         # Oracle bağlantısı
@@ -2238,49 +2293,54 @@ def execute_import_process(process_id):
             cursor.execute(create_table_query)
             connection.commit()
         
+        # Sadece dahil edilen sütunları al
+        included_columns = [mapping['excel_column'] for mapping in column_mappings]
+        
+        # Sütun eşleştirmelerini hazırla
+        column_type_map = {}
+        oracle_column_map = {}  # Excel sütun adı -> Oracle sütun adı eşleştirmesi
+        for mapping in column_mappings:
+            excel_col = mapping.get('excel_column')
+            oracle_col = mapping.get('oracle_column')
+            oracle_type = mapping.get('oracle_type')
+            if excel_col and oracle_col:
+                column_type_map[excel_col] = oracle_type
+                oracle_column_map[excel_col] = oracle_col
+        
+        # Sadece dahil edilen sütunları kullan
+        columns = included_columns
+        placeholders = ','.join([':' + str(i+1) for i in range(len(columns))])        
+        # Oracle sütun adlarını tırnak içinde kullan (sayısal isimler için)
+        oracle_columns_quoted = [f'"{oracle_column_map[col]}"' for col in columns]
+        insert_query = f"INSERT INTO {process.table_name} ({', '.join(oracle_columns_quoted)}) VALUES ({placeholders})"
+        
         # Verileri Oracle'a aktar
+        data_to_insert = []
+
         for _, row in df.iterrows():
-            values = []
-            columns = []
-            
-            for mapping in column_mappings:
-                excel_col = mapping['excel_column']
-                oracle_col = mapping['oracle_column']
-                oracle_type = mapping['oracle_type'].upper()
-                
-                if excel_col in df.columns:
-                    value = row[excel_col]
-                    
-                    # Veri tipi dönüşümü
-                    if 'NUMBER' in oracle_type or 'INTEGER' in oracle_type or 'FLOAT' in oracle_type:
-                        value = float(value) if pd.notna(value) else 0
-                    elif 'DATE' in oracle_type or 'TIMESTAMP' in oracle_type:
-                        value = value if pd.notna(value) and isinstance(value, (pd.Timestamp, datetime)) else None
-                    else:
-                        value = str(value) if pd.notna(value) else None
-                    
-                    values.append(value)
-                    columns.append(oracle_col)
-            
-            placeholders = ','.join([':' + str(i+1) for i in range(len(columns))])
-            quoted_columns = [f'"{col}"' for col in columns]
-            insert_query = f"INSERT INTO {process.table_name} ({','.join(quoted_columns)}) VALUES ({placeholders})"
-            
-            try:
-                cursor.execute(insert_query, values)
-            except oracledb.DatabaseError as e:
-                error, = e.args
-                return jsonify({
-                    'success': False, 
-                    'error': f'Veri aktarımı sırasında hata: {error.message}. Sütun: {excel_col}, Değer: {value}'
-                })
+            row_data = []
+            for col in columns:
+                value = row[col]
+                oracle_type = column_type_map.get(col)
+                converted_value = convert_excel_value_to_oracle(value, oracle_type)
+                row_data.append(converted_value)
+            data_to_insert.append(row_data)
+        
+        try:
+            cursor.executemany(insert_query, data_to_insert)
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            return jsonify({
+                'success': False, 
+                'error': f'Veri aktarımı sırasında hata: {error.message}.'
+            })
         
         connection.commit()
         cursor.close()
         connection.close()
         
         # Son kullanım zamanını güncelle
-        process.last_used_at = datetime.utcnow()
+        process.last_used_at = datetime.now()
         db.session.commit()
         
         return jsonify({
@@ -2289,6 +2349,8 @@ def execute_import_process(process_id):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    
+
 
 @app.route('/step/<int:step_id>/import_process')
 def get_step_import_process(step_id):
@@ -2304,7 +2366,7 @@ def get_step_import_process(step_id):
         import_process = ImportProcess.query.get(step.import_process_id)
         if not import_process:
             return jsonify({'error': 'Import process bulunamadı'}), 404
-            
+        
         # Import process bilgilerini hazırla
         process_data = {
             'file_path': import_process.file_path,
@@ -2317,9 +2379,8 @@ def get_step_import_process(step_id):
             
         return jsonify(process_data)
     except Exception as e:
-        print(f"Import process bilgisi alınırken hata oluştu: {str(e)}")
         return jsonify({'error': f'Import process bilgisi alınırken hata oluştu: {str(e)}'}), 500
-
+    
 @app.route('/step/<int:step_id>/import_process', methods=['POST'])
 def update_step_import_process(step_id):
     """Adıma ait import process bilgilerini günceller"""
@@ -2336,7 +2397,6 @@ def update_step_import_process(step_id):
             return jsonify({'error': 'Import process bulunamadı'}), 404
             
         data = request.get_json()
-        
         # Gerekli alanları kontrol et
         required_fields = ['file_path', 'sheet_name', 'table_name', 'import_mode', 'column_mappings']
         for field in required_fields:
@@ -2355,9 +2415,8 @@ def update_step_import_process(step_id):
         return jsonify({'message': 'Import process başarıyla güncellendi'})
     except Exception as e:
         db.session.rollback()
-        print(f"Import process güncellenirken hata oluştu: {str(e)}")
         return jsonify({'error': f'Import process güncellenirken hata oluştu: {str(e)}'}), 500
-
+    
 @app.route('/download_excel/<filename>')
 def download_excel(filename):
     """Excel dosyasını indir"""
@@ -2369,6 +2428,8 @@ def download_excel(filename):
             'status': 'error',
             'message': f'Excel dosyası indirilirken hata oluştu: {str(e)}'
         }), 500
+
+
 
 @app.route('/api/oracle/packages')
 def get_oracle_packages():
@@ -2409,7 +2470,7 @@ def get_oracle_packages():
                 a.in_out
             FROM 
                 all_procedures p
-                LEFT JOIN all_arguments a ON p.object_name = a.object_name 
+                LEFT JOIN all_arguments a ON p.procedure_name = a.object_name 
                 AND p.procedure_name = a.object_name
                 AND p.owner = a.owner
             WHERE 
@@ -2425,6 +2486,7 @@ def get_oracle_packages():
             in_out
         FROM 
             procedure_info
+        WHERE PROCEDURE_NAME IS NOT NULL
         ORDER BY 
             package_name NULLS FIRST,
             procedure_name,
@@ -2463,7 +2525,6 @@ def get_oracle_packages():
                         'type': data_type,
                         'in_out': in_out
                     })
-        
         cursor.close()
         connection.close()
         
@@ -2478,6 +2539,7 @@ def get_oracle_packages():
             'message': str(e)
         })
 
+
 @app.route('/step/<int:step_id>/status', methods=['GET'])
 def check_step_status(step_id):
     """Adımın durumunu kontrol eder"""
@@ -2486,40 +2548,168 @@ def check_step_status(step_id):
         'status': step.status
     })
 
-@app.route('/step/<int:step_id>/update_status', methods=['POST'])
-def update_step_status(step_id):
-    """Adımın durumunu günceller"""
+@app.route('/step/<int:step_id>/logs', methods=['GET'])
+def get_step_logs(step_id):
+    """Adımın loglarını döndürür"""
     try:
-        data = request.get_json()
-        status = data.get('status')
-        
-        if not status:
-            return jsonify({
-                'status': 'error',
-                'message': 'Durum belirtilmedi'
-            }), 400
-        
         step = Step.query.get_or_404(step_id)
-        step.status = status
         
-        if status == 'done':
-            step.completed_at = datetime.now()
+        # SQL script ve SQL prosedür adımları için log döndür
+        if step.type not in ['sql_script', 'sql_procedure']:
+            return jsonify({
+                'success': False,
+                'error': 'Bu adım tipi için log bulunmuyor'
+            })
         
-        db.session.commit()
+        # Log dosyasının yolunu belirle
+        log_file_path = os.path.join(app.instance_path, f'step_{step_id}_logs.json')
+        
+        if not os.path.exists(log_file_path):
+            return jsonify({
+                'success': True,
+                'logs': []
+            })
+        
+        # Log dosyasını oku
+        with open(log_file_path, 'r', encoding='utf-8') as f:
+            logs = json.load(f)
         
         return jsonify({
-            'status': 'success',
-            'message': 'Durum güncellendi'
+            'success': True,
+            'logs': logs
         })
+        
     except Exception as e:
-        db.session.rollback()
         return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/process/<int:process_id>/export-data')
+def export_process_data(process_id):
+    """Süreç verilerini JSON olarak döndürür (PDF export için)"""
+    process = Process.query.get_or_404(process_id)
+    
+    # Ana adımları al
+    main_steps = Step.query.filter_by(
+        process_id=process_id,
+        parent_id=None
+    ).order_by(Step.order).all()
+    
+    # Tüm adımları organize et
+    organized_steps = []
+    for main_step in main_steps:
+        organized_steps.append(main_step)
+        organized_steps.extend(get_substeps_recursive(main_step.id))
+    
+    # İstatistikler
+    total_steps = len(organized_steps)
+    completed_steps = sum(1 for step in organized_steps if step.status == 'done')
+    in_progress_steps = sum(1 for step in organized_steps if step.status == 'in_progress')
+    waiting_steps = sum(1 for step in organized_steps if step.status == 'waiting')
+    not_started_steps = sum(1 for step in organized_steps if step.status == 'not_started')
+    
+    # Sorumlular
+    responsibles = {}
+    for step in organized_steps:
+        if step.responsible:
+            if step.responsible not in responsibles:
+                responsibles[step.responsible] = {'total': 0, 'completed': 0}
+            responsibles[step.responsible]['total'] += 1
+            if step.status == 'done':
+                responsibles[step.responsible]['completed'] += 1
+    
+    # Adım verilerini hazırla
+    steps_data = []
+    for step in organized_steps:
+        indent_level = step.get_full_order().count('.')
+        steps_data.append({
+            'order': step.get_full_order(),
+            'name': step.name,
+            'indent_level': indent_level,
+            'responsible': step.responsible or '-',
+            'type': step.type.replace('_', ' ').title() if step.type else '-',
+            'status': step.status.replace('_', ' ').title(),
+            'completed_at': step.completed_at.strftime('%d.%m.%Y %H:%M') if step.completed_at else '-',
+            'deadline': step.deadline.strftime('%d.%m.%Y %H:%M') if step.deadline else '-'
+        })
+    
+    # Sorumlu verilerini hazırla
+    responsibles_data = []
+    for resp, stats in responsibles.items():
+        completion_rate = int((stats['completed'] / stats['total']) * 100) if stats['total'] > 0 else 0
+        responsibles_data.append({
+            'name': resp,
+            'total': stats['total'],
+            'completed': stats['completed'],
+            'completion_rate': completion_rate
+        })
+    
+    return jsonify({
+        'process': {
+            'id': process.id,
+            'name': process.name,
+            'description': process.description or 'Açıklama yok',
+            'created_at': process.created_at.strftime('%d.%m.%Y %H:%M'),
+            'is_started': process.is_started,
+            'started_at': process.started_at.strftime('%d.%m.%Y %H:%M') if process.started_at else 'Başlatılmadı',
+            'completion_percentage': process.get_completion_percentage(),
+            'status': process.get_status().replace('_', ' ').title(),
+            'category': process.category.name if process.category else 'Kategorisiz',
+            'year': process.year
+        },
+        'steps': steps_data,
+        'statistics': {
+            'total_steps': total_steps,
+            'completed_steps': completed_steps,
+            'in_progress_steps': in_progress_steps,
+            'waiting_steps': waiting_steps,
+            'not_started_steps': not_started_steps
+        },
+        'responsibles': responsibles_data,
+        'report_date': datetime.now().strftime('%d.%m.%Y %H:%M')
+    })
+
+def convert_excel_value_to_oracle(value, oracle_type=None):
+    """Excel değerini Oracle veri tipine uygun şekilde dönüştürür"""
+    if value is None or pd.isna(value):
+        return None
+    
+    if oracle_type:
+        oracle_type = oracle_type.upper()
+        
+        if 'VARCHAR' in oracle_type or 'CHAR' in oracle_type:
+            return str(value)
+        elif 'NUMBER' in oracle_type:
+            try:
+                return float(value)
+            except:
+                return None
+        elif 'DATE' in oracle_type:
+            try:
+                if isinstance(value, str):
+                    return pd.to_datetime(value)
+                return value
+            except:
+                return None
+        else:
+            return str(value)
+    else:
+        # Veri tipini otomatik belirle
+        if isinstance(value, (int, float)):
+            return value
+        elif isinstance(value, str):
+            # Tarih kontrolü
+            try:
+                return pd.to_datetime(value)
+            except:
+                return str(value)
+        else:
+            return str(value)
+
 
 if __name__ == '__main__':
     with app.app_context():
-        # Sadece tabloları oluştur, silme işlemini kaldır
         db.create_all()
-    app.run(debug=True, port=5001) 
+        create_import_process_table()
+        app.run(debug=True, host='0.0.0.0', port=5001) 
